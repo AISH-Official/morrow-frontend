@@ -1,0 +1,19 @@
+.composer{grid-template-columns:48px 1fr 38px 42px}
+.composer .sound{height:40px;color:#476873}
+.phase-label{height:22px;margin-bottom:2px;display:flex;align-items:center;gap:8px;font:500 8px 'JetBrains Mono';letter-spacing:.13em;text-transform:uppercase;color:#5d818b;transition:color .3s}
+.phase-label i{width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+.phase-listening .phase-label,.phase-speaking .phase-label{color:#8eeaff}.phase-thinking .phase-label{color:#e0bf6d}
+.scan-line{position:absolute;inset:42px;border-radius:50%;overflow:hidden;opacity:0;transition:opacity .25s}
+.scan-line:after{content:"";position:absolute;left:13%;right:13%;height:1px;top:20%;background:linear-gradient(90deg,transparent,#75e6fa,transparent);box-shadow:0 0 12px #64d9ee;animation:scan 1.7s ease-in-out infinite}
+.thinking-dots{display:none;position:relative;gap:7px;align-items:center}
+.thinking-dots i{width:5px;height:5px;border-radius:50%;background:#8de8f7;animation:dot 1s ease-in-out infinite}.thinking-dots i:nth-child(2){animation-delay:.15s}.thinking-dots i:nth-child(3){animation-delay:.3s}
+.phase-thinking .wave{display:none}.phase-thinking .thinking-dots{display:flex}.phase-thinking .scan-line{opacity:1}.phase-thinking .ring-two{border-top-color:#e0bd64}.phase-thinking .core-halo{box-shadow:0 0 55px rgba(213,177,78,.18),inset 0 0 30px rgba(213,177,78,.08)}
+.phase-listening .ai-core,.phase-speaking .ai-core{filter:drop-shadow(0 0 45px rgba(88,224,248,.33))}
+.phase-listening .ring-one{animation-duration:4.5s}.phase-listening .core-halo{animation-duration:1.2s;box-shadow:0 0 70px rgba(76,224,250,.35),inset 0 0 38px rgba(70,207,234,.2)}
+.phase-speaking .wave i{animation-duration:.55s}.phase-speaking .core-halo{animation-duration:1.55s}.phase-speaking .particle{animation-duration:1.7s}
+.cursor{display:inline-block;width:1px;height:1em;margin-left:3px;vertical-align:-.1em;background:#8ce9fa;animation:blink .65s steps(1) infinite}
+.conversation p{transition:opacity .25s,transform .25s}.conversation .user{padding:6px 12px;border:1px solid rgba(105,217,238,.12);border-radius:14px;background:rgba(55,147,165,.07);display:inline-block}
+.composer input:disabled{opacity:.55}
+@keyframes scan{0%{top:18%;opacity:0}20%{opacity:1}80%{opacity:1}100%{top:80%;opacity:0}}
+@keyframes dot{0%,100%{transform:translateY(0);opacity:.35}50%{transform:translateY(-7px);opacity:1}}
+@keyframes blink{50%{opacity:0}}

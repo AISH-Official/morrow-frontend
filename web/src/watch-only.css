@@ -1,0 +1,4 @@
+.watch-only-preview .devices-stage{padding-top:36px;gap:0;min-height:780px}
+.watch-only-preview .watch-column{padding-top:0;transform:scale(1.08);transform-origin:top center}
+.watch-only-preview .watch-column .device-label{justify-content:center}
+.watch-only-preview .watch-detail{background:rgba(8,24,31,.45);border:1px solid rgba(99,199,219,.1);border-radius:13px;padding:13px}
