@@ -3,34 +3,75 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject private var health: HealthStore
     private let analyzer = BaselineAnalyzer()
+
+    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+
     var body: some View {
         let result = analyzer.analyze(current: health.snapshot)
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("오늘의 웰니스 부하").font(.caption).foregroundStyle(.secondary)
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(result.summary).font(.largeTitle.bold())
-                        Spacer(); Text("\(result.load)").font(.system(size: 42, weight: .bold))
+                VStack(alignment: .leading, spacing: Theme.spacing) {
+                    header
+
+                    LoadGaugeCard(result: result)
+
+                    Text("오늘의 지표")
+                        .font(.headline)
+                        .padding(.top, 4)
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        MetricCard(title: "수면", value: health.snapshot.sleepText, icon: "bed.double.fill", tint: .indigo)
+                        MetricCard(title: "HRV", value: health.snapshot.hrvText, icon: "waveform.path.ecg", tint: .pink)
+                        MetricCard(title: "안정 심박", value: health.snapshot.restingHeartRateText, icon: "heart.fill", tint: .red)
+                        MetricCard(title: "걸음", value: health.snapshot.stepsText, icon: "figure.walk", tint: .green)
                     }
-                    ForEach(result.evidence, id: \.self) { Text("• \($0)").font(.subheadline).foregroundStyle(.secondary) }
-                    HStack { metric("수면", "5h 48m"); metric("HRV", "41 ms") }
-                    GroupBox("지금의 추천") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("7분 동안 가볍게 걸어보세요").font(.headline)
-                            Text("과거의 유사한 상태에서 짧은 걷기가 도움이 됐습니다.").font(.caption).foregroundStyle(.secondary)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+
+                    RecommendationCard(
+                        title: "7분 동안 가볍게 걸어보세요",
+                        rationale: "과거의 유사한 상태에서 짧은 걷기가 도움이 됐습니다."
+                    )
+                    .padding(.top, 4)
+
+                    NavigationLink(destination: CheckInView()) {
+                        Label("지금 상태 기록하기", systemImage: "square.and.pencil")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
                     }
-                    NavigationLink("상태 직접 기록", destination: CheckInView())
-                    Text("의료 진단이 아닌 일상 웰니스 분석입니다.").font(.caption2).foregroundStyle(.secondary)
-                }.padding()
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.top, 4)
+
+                    footer
+                }
+                .padding(.horizontal, Theme.spacing)
+                .padding(.bottom, Theme.spacing)
             }
+            .background(Theme.screenBackground)
             .navigationTitle("Morrow")
             .task { await health.requestAuthorizationAndLoad() }
         }
     }
-    private func metric(_ name: String, _ value: String) -> some View {
-        VStack(alignment: .leading) { Text(name).font(.caption); Text(value).font(.title2.bold()) }
-            .frame(maxWidth: .infinity, alignment: .leading).padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(Date.now.formatted(.dateTime.locale(Locale(identifier: "ko_KR")).month(.wide).day().weekday(.wide)))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("오늘의 웰니스")
+                .font(.title2.bold())
+        }
+        .padding(.top, 4)
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(health.authorizationMessage, systemImage: "heart.text.square")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Label("의료 진단이 아닌 일상 웰니스 분석입니다.", systemImage: "info.circle")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.top, 8)
     }
 }
