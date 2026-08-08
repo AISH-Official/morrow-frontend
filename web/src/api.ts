@@ -1,4 +1,4 @@
-import type{CheckInInput,ConnectionMode,Dashboard,TimelineItem,TimelineKind,WeeklyReport}from'./types';
+import type{AssistantResult,CheckInInput,ConnectionMode,Dashboard,PersonalizationProfile,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
 
 const API_ROOT='/api/v1';
 const REQUEST_TIMEOUT=5000;
@@ -59,12 +59,20 @@ export async function getWeeklyReport():Promise<WeeklyReport>{
  catch{return demoReport}
 }
 
-export async function sendAssistantMessage(content:string):Promise<string>{
+export async function sendAssistantMessage(content:string):Promise<AssistantResult>{
  try{
-  const result=await request<{content:string}>('/assistant/messages',{method:'POST',body:JSON.stringify({userId:'default-user',content})});
-  return result.content;
- }catch{return localAssistantResponse(content)}
+  return await request<AssistantResult>('/assistant/messages',{method:'POST',body:JSON.stringify({userId:'default-user',content})});
+ }catch{return{content:localAssistantResponse(content),aiMode:'LOCAL',personalizationEvidenceCount:0,personalized:false}}
 }
+
+export async function getPersonalization():Promise<{profile:PersonalizationProfile;memories:UserMemory[]}>{
+ try{return{profile:await request<PersonalizationProfile>('/personalization/profile?userId=default-user'),memories:await request<UserMemory[]>('/personalization/memories?userId=default-user')}}
+ catch{return{profile:{userId:'default-user',activeMemoryCount:0,evidenceCount:0,helpfulStrategyCount:0,avoidStrategyCount:0,lastLearnedAt:null,personalized:false},memories:[]}}
+}
+
+export async function rebuildPersonalization():Promise<PersonalizationProfile>{return request<PersonalizationProfile>('/personalization/rebuild?userId=default-user',{method:'POST'})}
+
+export async function addPersonalMemory(type:'PREFERENCE'|'GOAL',summary:string):Promise<UserMemory>{return request<UserMemory>('/personalization/memories',{method:'POST',body:JSON.stringify({userId:'default-user',type,summary})})}
 
 export async function createCheckIn(input:CheckInInput):Promise<{id:string}>{
  try{return await request<{id:string}>('/check-ins',{method:'POST',body:JSON.stringify(input)})}

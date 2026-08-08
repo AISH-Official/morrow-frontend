@@ -1,7 +1,7 @@
 import{FormEvent,useEffect,useMemo,useRef,useState}from'react';
 import{Activity,Archive,BarChart3,BrainCircuit,Check,ChevronRight,Command,Footprints,HeartPulse,History,LockKeyhole,Mic,MicOff,MoonStar,Plus,RefreshCw,Send,Settings2,ShieldCheck,Signal,Sparkles,ThumbsDown,ThumbsUp,Trash2,Volume2,VolumeX,Watch,X}from'lucide-react';
-import{appendLocalCheckIn,clearWellnessData,createCheckIn,getDashboard,getWeeklyReport,sendAssistantMessage,submitRecommendationFeedback}from'./api';
-import type{CheckInCause,CheckInInput,CheckInStatus,ConnectionMode,Dashboard,TimelineItem,TimelineKind,WeeklyReport}from'./types';
+import{addPersonalMemory,appendLocalCheckIn,clearWellnessData,createCheckIn,getDashboard,getPersonalization,getWeeklyReport,rebuildPersonalization,sendAssistantMessage,submitRecommendationFeedback}from'./api';
+import type{CheckInCause,CheckInInput,CheckInStatus,ConnectionMode,Dashboard,PersonalizationProfile,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
 
 type Role='ai'|'user';
 type Phase='idle'|'listening'|'thinking'|'speaking';
@@ -32,6 +32,9 @@ export default function App(){
  const[toast,setToast]=useState('');
  const[feedbackDone,setFeedbackDone]=useState(false);
  const[refreshing,setRefreshing]=useState(false);
+ const[personalization,setPersonalization]=useState<PersonalizationProfile|null>(null);
+ const[memories,setMemories]=useState<UserMemory[]>([]);
+ const[aiMode,setAiMode]=useState<'LIVE'|'FALLBACK'|'LOCAL'|'UNKNOWN'>('UNKNOWN');
  const recognition=useRef<RecognitionLike|null>(null);
  const nextId=useRef(3);
  const particles=useMemo(()=>Array.from({length:34},(_,index)=>({left:`${(index*47)%100}%`,top:`${(index*71)%100}%`,delay:`-${(index%13)*.37}s`,size:1+(index%3)})),[]);
@@ -41,8 +44,8 @@ export default function App(){
 
  async function loadData(showSpinner=false){
   if(showSpinner)setRefreshing(true);
-  const[dashResult,weekly]=await Promise.all([getDashboard(),getWeeklyReport()]);
-  setDashboard(dashResult.data);setMode(dashResult.mode);setReport(weekly);setRefreshing(false);
+  const[dashResult,weekly,personal]=await Promise.all([getDashboard(),getWeeklyReport(),getPersonalization()]);
+  setDashboard(dashResult.data);setMode(dashResult.mode);setReport(weekly);setPersonalization(personal.profile);setMemories(personal.memories);setRefreshing(false);
  }
 
  function speak(text:string){
@@ -58,7 +61,7 @@ export default function App(){
  async function send(text=message){
   const clean=text.trim();if(!clean||phase==='thinking'||phase==='speaking')return;
   recognition.current?.stop();window.speechSynthesis?.cancel();setChats(value=>[...value,{id:nextId.current++,role:'user',text:clean}]);setMessage('');setPhase('thinking');
-  const answer=await sendAssistantMessage(clean);streamAnswer(answer);
+  const result=await sendAssistantMessage(clean);setAiMode(result.aiMode);if(result.personalized)setPersonalization(value=>value?{...value,evidenceCount:Math.max(value.evidenceCount,result.personalizationEvidenceCount),personalized:true}:value);streamAnswer(result.content);
  }
 
  function toggleMic(){
@@ -85,7 +88,7 @@ export default function App(){
 
  async function feedback(helpful:boolean){
   if(!dashboard?.recommendation)return;
-  try{await submitRecommendationFeedback(dashboard.recommendation.id,helpful)}catch{setMode('demo')}
+  try{await submitRecommendationFeedback(dashboard.recommendation.id,helpful);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories)}catch{setMode('demo')}
   setFeedbackDone(true);setToast(helpful?'좋아요. 이 회복 방법을 더 잘 기억할게요.':'알겠어요. 다음에는 다른 방법을 제안할게요.');
   const now=new Date();
   const recovery:TimelineItem={id:`feedback-${Date.now()}`,time:now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}),title:'회복 활동 피드백',detail:helpful?'짧은 걷기가 도움이 됐어요.':'이번 추천은 도움이 되지 않았어요.',kind:'recovery',userConfirmed:true};
@@ -93,8 +96,11 @@ export default function App(){
  }
 
  async function deleteData(){
-  try{await clearWellnessData();await loadData();setToast('서버의 웰니스 기록을 삭제했어요.')}catch{setDashboard(value=>value?{...value,timeline:[]}:value);setToast('이 데모 세션의 기록을 비웠어요.')}
+  try{await clearWellnessData();await loadData();setToast('서버의 웰니스 기록과 개인화 메모리를 삭제했어요.')}catch{setDashboard(value=>value?{...value,timeline:[]}:value);setToast('이 데모 세션의 기록을 비웠어요.')}
  }
+
+ async function rebuildLearning(){try{await rebuildPersonalization();const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('전체 기록에서 개인화 메모리를 다시 학습했어요.')}catch{setToast('백엔드에 연결한 뒤 다시 시도해 주세요.')}}
+ async function addMemory(type:'PREFERENCE'|'GOAL',summary:string){try{await addPersonalMemory(type,summary);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('직접 알려준 내용을 개인화 메모리에 저장했어요.')}catch{setToast('메모리를 저장하지 못했어요.')}}
 
  const phaseText={idle:'무엇이든 이야기해 주세요',listening:'듣고 있어요',thinking:'당신의 흐름을 살펴보고 있어요',speaking:'답변하고 있어요'}[phase];
  const navItems:[ViewKey,string,typeof Command][]=[['today','오늘',Command],['timeline','타임라인',History],['report','주간 리포트',BarChart3],['privacy','데이터',Archive]];
@@ -102,12 +108,12 @@ export default function App(){
  return <div className={`app-shell phase-${phase}`}>
   <div className="atmosphere"/><div className="grid-floor"/>
   <aside className="rail" aria-label="주요 메뉴"><button className="mark" onClick={()=>setView('today')} aria-label="Morrow 홈">M</button><nav>{navItems.map(([key,label,Icon])=><button key={key} className={view===key?'on':''} onClick={()=>setView(key)} aria-label={label} title={label}><Icon/></button>)}</nav><a className="device-link" href="/device-preview" aria-label="기기 경험 보기" title="기기 경험"><Watch/></a><button className="settings" onClick={()=>setView('privacy')} aria-label="설정"><Settings2/></button></aside>
-  <header className="topbar"><div className="identity"><i className="status-dot"/><div><b>MORROW</b><span>PERSONAL WELLNESS INTELLIGENCE</span></div></div><div className="system-status"><span className={`mode ${mode}`}><Signal/> {mode==='live'?'LIVE API':'DEMO SAFE MODE'}</span><span><ShieldCheck/> PRIVATE BY DESIGN</span><button onClick={newSession}><Plus/> NEW SESSION</button></div></header>
+  <header className="topbar"><div className="identity"><i className="status-dot"/><div><b>MORROW</b><span>PERSONAL WELLNESS INTELLIGENCE</span></div></div><div className="system-status"><span className={`mode ${mode}`}><Signal/> {mode==='live'?'LIVE API':'DEMO SAFE MODE'}</span><span><BrainCircuit/> {aiMode==='LIVE'?'AI LIVE':personalization?.personalized?`MEMORY ${personalization.evidenceCount}`:'AI READY'}</span><span><ShieldCheck/> PRIVATE BY DESIGN</span><button onClick={newSession}><Plus/> NEW SESSION</button></div></header>
   <main className="main-area">
    {dashboard&&view==='today'&&<TodayView dashboard={dashboard} phase={phase} phaseText={phaseText} particles={particles} chats={chats} message={message} sound={sound} feedbackDone={feedbackDone} refreshing={refreshing} onMessage={setMessage} onSend={send} onMic={toggleMic} onSound={()=>{setSound(value=>!value);window.speechSynthesis?.cancel()}} onSuggestion={send} onCheckIn={()=>setCheckInOpen(true)} onFeedback={feedback} onRefresh={()=>void loadData(true)}/>}
    {dashboard&&view==='timeline'&&<TimelineView items={dashboard.timeline} onCheckIn={()=>setCheckInOpen(true)}/>}
    {report&&view==='report'&&<ReportView report={report}/>}
-   {view==='privacy'&&<PrivacyView mode={mode} onDelete={()=>void deleteData()}/>}
+   {view==='privacy'&&<PrivacyView mode={mode} profile={personalization} memories={memories} onRebuild={()=>void rebuildLearning()} onAdd={addMemory} onDelete={()=>void deleteData()}/>}
    {!dashboard&&view!=='privacy'&&<LoadingView/>}
   </main>
   <footer><span>WELLNESS SUPPORT — NOT MEDICAL DIAGNOSIS</span><span className="session"><i/> {mode==='live'?'API CONNECTED':'RESILIENT DEMO SESSION'}</span></footer>
@@ -150,7 +156,19 @@ function ReportView({report}:{report:WeeklyReport}){
  return <div className="page-view report-view"><div className="page-heading"><div><span>WEEKLY PATTERN REPORT</span><h1>이번 주, 무엇이 달랐을까요?</h1><p>단정 대신 반복된 신호와 회복에 도움이 된 행동을 보여줘요.</p></div><div className="week-chip">{weekRange()}</div></div><div className="report-grid"><section className="report-hero"><div><span>WELLNESS MOMENTUM</span><b>{Math.round(report.improvementRate)}%</b><small>회복 체크인 비율</small></div><div className="weekly-chart">{bars.map((height,index)=><div key={index}><i style={{height:`${height}%`}} className={index===5?'peak':''}/><span>{['월','화','수','목','금','토','일'][index]}</span></div>)}</div></section><section className="report-summary"><span>이번 주 요약</span><h2>{report.insights}</h2><div><small>체크인</small><b>{report.totalCheckIns}회</b></div><div><small>가장 잦은 상태</small><b>{statusLabel[report.topStatus??'']??'기록 없음'}</b></div><div><small>주요 맥락</small><b>{causeLabel[report.topCause??'']??'기록 없음'}</b></div></section><section className="patterns"><span>PATTERN INTELLIGENCE</span>{report.patterns.map((pattern,index)=><article key={pattern}><i>0{index+1}</i><p>{translatePattern(pattern)}</p></article>)}</section><section className="trust-card"><ShieldCheck/><div><b>이 인사이트를 믿을 수 있는 이유</b><p>개인 기준선, 직접 체크인, 추천 피드백만 사용했어요. 의료적 판단이나 다른 사용자와의 비교는 하지 않습니다.</p></div></section></div></div>
 }
 
-function PrivacyView({mode,onDelete}:{mode:ConnectionMode;onDelete:()=>void}){return <div className="page-view privacy-view"><div className="page-heading"><div><span>PRIVACY CENTER</span><h1>당신의 데이터는 당신의 것</h1><p>무엇을 읽고, 어디에 저장하고, 어떻게 지우는지 숨기지 않아요.</p></div></div><div className="privacy-grid"><article><div className="privacy-icon"><HeartPulse/></div><span>HEALTHKIT</span><h2>원본 건강 데이터는<br/>iPhone 안에서 분석</h2><p>허용한 수면, 심박, HRV, 걸음만 읽으며 원본을 범용 AI 학습이나 광고에 사용하지 않아요.</p></article><article><div className="privacy-icon"><LockKeyhole/></div><span>MINIMUM DATA</span><h2>서버에는 필요한<br/>파생 결과만</h2><p>체크인과 설명에 필요한 최소 정보만 전송하고, 각 AI 결과에 근거와 사용자 확인 상태를 연결해요.</p></article><article><div className="privacy-icon"><ShieldCheck/></div><span>USER CONTROL</span><h2>언제든 기록을<br/>직접 삭제</h2><p>개별 타임라인을 수정하거나 전체 웰니스 기록을 한 번에 삭제할 수 있어요.</p></article></div><div className="data-status"><div><i className={mode}/><span>현재 연결</span><b>{mode==='live'?'로컬 API · 암호화 전송':'복원력 있는 데모 데이터'}</b></div><div><span>AI 사용 범위</span><b>웰니스 대화 · 진단 제외</b></div><button onClick={onDelete}><Trash2/> 모든 웰니스 기록 삭제</button></div><div className="safety-note"><BrainCircuit/><p><b>Morrow는 의료기기나 응급 서비스가 아닙니다.</b> 증상이 지속되거나 긴급한 도움이 필요하면 의료 전문가 또는 지역 응급기관에 연락하세요.</p></div></div>}
+function PrivacyView({mode,profile,memories,onRebuild,onAdd,onDelete}:{mode:ConnectionMode;profile:PersonalizationProfile|null;memories:UserMemory[];onRebuild:()=>void;onAdd:(type:'PREFERENCE'|'GOAL',summary:string)=>Promise<void>;onDelete:()=>void}){
+ const[memoryText,setMemoryText]=useState('');const[memoryType,setMemoryType]=useState<'PREFERENCE'|'GOAL'>('PREFERENCE');const[saving,setSaving]=useState(false);
+ async function submitMemory(event:FormEvent){event.preventDefault();const clean=memoryText.trim();if(!clean)return;setSaving(true);await onAdd(memoryType,clean);setMemoryText('');setSaving(false)}
+ const memoryLabel:Record<UserMemory['type'],string>={TRIGGER_PATTERN:'반복 맥락',RECOVERY_STRATEGY:'회복 피드백',PREFERENCE:'선호',GOAL:'목표'};
+ return <div className="page-view privacy-view"><div className="page-heading"><div><span>PRIVACY & PERSONAL MEMORY</span><h1>AI가 무엇을 기억하는지 직접 확인하세요</h1><p>범용 모델을 재학습하지 않고, 이 계정의 근거 있는 패턴만 개인화 컨텍스트로 사용해요.</p></div><button className="page-action" onClick={onRebuild}><RefreshCw/> 기록에서 다시 학습</button></div>
+  <section className="learning-console">
+   <div className="learning-score"><BrainCircuit/><div><span>PERSONALIZATION ENGINE</span><b>{profile?.personalized?'개인화 활성':'학습 대기'}</b><p>활성 메모리 {profile?.activeMemoryCount??0}개 · 누적 근거 {profile?.evidenceCount??0}건 · 도움 된 전략 {profile?.helpfulStrategyCount??0}개</p></div></div>
+   <form className="memory-form" onSubmit={submitMemory}><div><button type="button" className={memoryType==='PREFERENCE'?'on':''} onClick={()=>setMemoryType('PREFERENCE')}>내 선호</button><button type="button" className={memoryType==='GOAL'?'on':''} onClick={()=>setMemoryType('GOAL')}>내 목표</button></div><input maxLength={600} value={memoryText} onChange={event=>setMemoryText(event.target.value)} placeholder="예: 강한 운동보다 짧은 산책을 선호해요"/><button disabled={saving||!memoryText.trim()}><Plus/> 기억하기</button></form>
+   <div className="memory-list">{memories.length?memories.slice(0,8).map(memory=><article key={memory.id}><span>{memoryLabel[memory.type]}</span><p>{memory.summary}</p><small>신뢰도 {Math.round(memory.confidence*100)}% · 근거 {memory.evidenceCount}건</small></article>):<div className="memory-empty">체크인과 추천 피드백이 쌓이면 여기에 개인화 근거가 표시됩니다.</div>}</div>
+  </section>
+  <div className="privacy-grid"><article><div className="privacy-icon"><HeartPulse/></div><span>HEALTHKIT</span><h2>원본 건강 데이터는<br/>iPhone 안에서 분석</h2><p>허용한 수면, 심박, HRV, 걸음만 읽으며 원본을 범용 AI 학습이나 광고에 사용하지 않아요.</p></article><article><div className="privacy-icon"><LockKeyhole/></div><span>ACCOUNT MEMORY</span><h2>서버에는 설명 가능한<br/>개인 메모리만</h2><p>체크인과 피드백에서 만들어진 패턴은 근거 수와 신뢰도를 함께 저장하고 AI 요청 때만 사용해요.</p></article><article><div className="privacy-icon"><ShieldCheck/></div><span>USER CONTROL</span><h2>언제든 기록과 기억을<br/>함께 삭제</h2><p>전체 삭제 시 체크인, 대화, 추천 피드백, 개인화 메모리까지 모두 제거해요.</p></article></div>
+  <div className="data-status"><div><i className={mode}/><span>현재 연결</span><b>{mode==='live'?'로컬 API · 영구 저장':'복원력 있는 데모 데이터'}</b></div><div><span>AI 사용 범위</span><b>계정별 개인화 · 범용 학습 제외</b></div><button onClick={onDelete}><Trash2/> 기록과 AI 메모리 삭제</button></div><div className="safety-note"><BrainCircuit/><p><b>Morrow는 의료기기나 응급 서비스가 아닙니다.</b> 증상이 지속되거나 긴급한 도움이 필요하면 의료 전문가 또는 지역 응급기관에 연락하세요.</p></div></div>
+}
 
 function CheckInModal({onClose,onSave}:{onClose:()=>void;onSave:(input:CheckInInput)=>Promise<void>}){
  const[status,setStatus]=useState<CheckInStatus>('TIRED');const[cause,setCause]=useState<CheckInCause>('SLEEP');const[note,setNote]=useState('');const[saving,setSaving]=useState(false);

@@ -42,3 +42,27 @@ export type CheckInInput={
 };
 
 export type ConnectionMode='live'|'demo';
+
+export type PersonalizationProfile={
+ userId:string;
+ activeMemoryCount:number;
+ evidenceCount:number;
+ helpfulStrategyCount:number;
+ avoidStrategyCount:number;
+ lastLearnedAt:string|null;
+ personalized:boolean;
+};
+
+export type UserMemory={
+ id:string;
+ type:'TRIGGER_PATTERN'|'RECOVERY_STRATEGY'|'PREFERENCE'|'GOAL';
+ summary:string;
+ positiveEvidence:number;
+ negativeEvidence:number;
+ evidenceCount:number;
+ confidence:number;
+ source:string;
+ updatedAt:string;
+};
+
+export type AssistantResult={content:string;aiMode:'LIVE'|'FALLBACK'|'LOCAL';personalizationEvidenceCount:number;personalized:boolean};
