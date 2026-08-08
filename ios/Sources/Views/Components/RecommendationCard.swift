@@ -1,32 +1,36 @@
 import SwiftUI
 
-/// 현재 상태에 맞는 행동 추천을 강조해서 보여주는 카드.
 struct RecommendationCard: View {
     let title: String
     let rationale: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("지금의 추천", systemImage: "sparkles")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.85))
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.white)
-            Text(rationale)
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.85))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("NEXT BEST ACTION", systemImage: "sparkles")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(Theme.accent)
+                Spacer()
+                Text("약 7분")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted)
+            }
+            Text(title).font(.title3.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+            Text(rationale).font(.footnote).foregroundStyle(Theme.textSecondary)
+            HStack(spacing: 7) {
+                Image(systemName: "checkmark.circle")
+                Text("부담이 적고 지금 바로 실행할 수 있어요")
+            }
+            .font(.caption2)
+            .foregroundStyle(Theme.mint)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Theme.spacing)
+        .padding(18)
         .background(
-            LinearGradient(
-                colors: [.indigo, .blue],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: Theme.cardCornerRadius)
+            LinearGradient(colors: [Color(red: 18 / 255, green: 55 / 255, blue: 67 / 255), Theme.panelBackground], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous)
         )
-        .accessibilityElement(children: .combine)
+        .overlay { RoundedRectangle(cornerRadius: Theme.cardCornerRadius).stroke(Theme.accent.opacity(0.25)) }
     }
 }

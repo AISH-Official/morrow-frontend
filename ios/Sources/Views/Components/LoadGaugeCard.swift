@@ -1,63 +1,47 @@
 import SwiftUI
 
-/// 오늘의 웰니스 부하를 원형 게이지와 근거 칩으로 보여주는 카드.
 struct LoadGaugeCard: View {
     let result: BaselineResult
     @State private var progress: Double = 0
-
     private var level: LoadLevel { LoadLevel(load: result.load) }
 
     var body: some View {
-        VStack(spacing: Theme.spacing) {
+        HStack(spacing: 18) {
             ZStack {
-                Circle()
-                    .stroke(level.color.opacity(0.15), lineWidth: 14)
+                Circle().stroke(Theme.accent.opacity(0.09), lineWidth: 11)
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(level.gradient, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                    .stroke(level.gradient, style: StrokeStyle(lineWidth: 11, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                VStack(spacing: 2) {
+                    .shadow(color: Theme.accent.opacity(0.24), radius: 10)
+                VStack(spacing: 1) {
                     Text("\(result.load)")
-                        .font(.system(size: 44, weight: .bold, design: .rounded))
-                        .contentTransition(.numericText())
-                    Text("/ 100")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 38, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("RECOVERY")
+                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(Theme.textMuted)
                 }
             }
-            .frame(width: 150, height: 150)
-            .padding(.top, 4)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("오늘의 웰니스 부하 \(result.load)점, \(level.label)")
+            .frame(width: 128, height: 128)
 
-            Text(level.label)
-                .font(.title3.bold())
-                .foregroundStyle(level.color)
-
-            if !result.evidence.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(result.evidence, id: \.self) { item in
-                        Label(item, systemImage: "info.circle")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                Theme.screenBackground,
-                                in: RoundedRectangle(cornerRadius: Theme.chipCornerRadius)
-                            )
-                    }
-                }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("PERSONAL BASELINE").morrowKicker()
+                Text(level.label)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("직접 체크인과 최근 건강 신호를 함께 살폈어요.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(Theme.spacing)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.cardCornerRadius))
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.9).delay(0.15)) {
-                progress = Double(result.load) / 100
-            }
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .morrowPanel()
+        .onAppear { withAnimation(.easeOut(duration: 0.9)) { progress = Double(result.load) / 100 } }
+        .accessibilityElement(children: .combine)
     }
 }

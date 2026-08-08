@@ -1,24 +1,70 @@
 import SwiftUI
+import SwiftData
 
 struct HealthSnapshot {
-    var sleepMinutes: Int = 348
-    var restingHeartRate: Double = 72
-    var hrv: Double = 41
-    var steps: Double = 4821
+    var sleepMinutes: Int = 0
+    var restingHeartRate: Double = 0
+    var hrv: Double = 0
+    var steps: Double = 0
+    var baselineSleepMinutes: Int = 0
+    var baselineRestingHeartRate: Double = 0
+    var baselineHRV: Double = 0
+    var hasHealthData = false
 
     var sleepText: String {
         let hours = sleepMinutes / 60
         let minutes = sleepMinutes % 60
+        guard sleepMinutes > 0 else { return "--" }
         return minutes == 0 ? "\(hours)시간" : "\(hours)시간 \(minutes)분"
     }
 
-    var hrvText: String { "\(Int(hrv)) ms" }
-    var restingHeartRateText: String { "\(Int(restingHeartRate)) bpm" }
+    var hrvText: String { hrv > 0 ? "\(Int(hrv)) ms" : "--" }
+    var restingHeartRateText: String { restingHeartRate > 0 ? "\(Int(restingHeartRate)) bpm" : "--" }
     var stepsText: String {
+        guard steps > 0 else { return "--" }
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: Int(steps))) ?? "\(Int(steps))"
     }
+}
+
+enum CheckInSource: String, Codable, CaseIterable {
+    case iPhone
+    case watch
+}
+
+@Model
+final class CheckInRecord {
+    @Attribute(.unique) var id: UUID
+    var statusRaw: String
+    var note: String
+    var causeRaw: String?
+    var sourceRaw: String
+    var recordedAt: Date
+
+    init(status: WellnessStatus, cause: WellnessCause? = nil, note: String = "", source: CheckInSource = .iPhone, recordedAt: Date = .now) {
+        self.id = UUID()
+        self.statusRaw = status.rawValue
+        self.note = note
+        self.causeRaw = cause?.rawValue
+        self.sourceRaw = source.rawValue
+        self.recordedAt = recordedAt
+    }
+
+    var status: WellnessStatus { WellnessStatus(rawValue: statusRaw) ?? .ok }
+    var source: CheckInSource { CheckInSource(rawValue: sourceRaw) ?? .iPhone }
+    var cause: WellnessCause? { causeRaw.flatMap(WellnessCause.init(rawValue:)) }
+}
+
+enum WellnessCause: String, CaseIterable, Codable, Identifiable {
+    case sleep = "수면"
+    case work = "업무"
+    case study = "학업"
+    case relationship = "관계"
+    case physical = "신체"
+    case unknown = "잘 모르겠음"
+
+    var id: String { rawValue }
 }
 
 enum WellnessStatus: String, CaseIterable, Codable, Identifiable {

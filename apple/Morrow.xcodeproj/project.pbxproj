@@ -1,0 +1,601 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A11A55E0000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A11A55E0000000000000003 /* Assets.xcassets */; };
+		0A11A55E0000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A11A55E0000000000000004 /* Assets.xcassets */; };
+		1BE187E0EB2E018B8CFA7EB5 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A4C0A5D80928CBF0743874 /* Theme.swift */; };
+		23C389B1C0F1B00314302F9B /* BaselineAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED3364F0048FA11122B66F0 /* BaselineAnalyzer.swift */; };
+		351D9EE971AC5E06F25C7505 /* MorrowWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393BAD6A329329DFDB4B0DB3 /* MorrowWatchApp.swift */; };
+		3B4D7C2905A0FA4F8520EE95 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EF7E1FCA991BDCC07A230829 /* PrivacyInfo.xcprivacy */; };
+		414063D00A9390521B2320C0 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16FDB2D0634D43A021E0F390 /* SettingsView.swift */; };
+		496B6BD2FD1BCE73862BC7AA /* HealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DED4169B24D2633D203F1C /* HealthStore.swift */; };
+		4EFBB0768EF4C44FE24CDA24 /* WellnessModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CEECA6E4F329806CD8C085D /* WellnessModels.swift */; };
+		52008737558B0BBDA35195EF /* WatchSessionReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC983B0A1343B391B2F39926 /* WatchSessionReceiver.swift */; };
+		549D0051F6B6ECD5882D85E7 /* MorrowWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A74AD0FD4385A5D5FFBB223F /* MorrowWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		65E7C0547D77ABABA83522FB /* WatchSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D255645F9DC174E59A557A3 /* WatchSessionManager.swift */; };
+		7E3F0C6D19D4D441A74700D7 /* LoadGaugeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76449714C6CAA9C524F1D9E0 /* LoadGaugeCard.swift */; };
+		8A39DF8732CA509D13382861 /* CheckInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6ACB78386343B63BB259722 /* CheckInView.swift */; };
+		8F0D03CCACF6AFE7C8F73A9D /* CheckInHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DDE170E37504CDF06B41F1 /* CheckInHistoryView.swift */; };
+		8F7211945F43F0FD448DA202 /* MetricCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F532714F3381C3CA95FDEA /* MetricCard.swift */; };
+		AC3F5CE4BF88C6FA9683C12E /* RecommendationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B5DE78742386EE5CFE1897 /* RecommendationCard.swift */; };
+		BE4A0C16EFB70CA3B23F742E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9BCD63975A9B3D8234A3061D /* PrivacyInfo.xcprivacy */; };
+		C80ECCD53C84446BF3B17F7B /* WatchCheckInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012E2B5F4A00F40976E1BC0B /* WatchCheckInView.swift */; };
+		F06E6259A286049FA5833268 /* MorrowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 712B73C5702A5023D34349F7 /* MorrowApp.swift */; };
+		F58AAB5D586550302DD0583D /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1600BA87FD520C24056EDAC0 /* DashboardView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		F6A0E0F349DC1F4C95E9EE9E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 756FB3F814EB341887BA7FCA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 083A931CEF1240FD851FB03A;
+			remoteInfo = MorrowWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FF02E2354D9A5D50C6496D9A /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				549D0051F6B6ECD5882D85E7 /* MorrowWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0A11A55E0000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0A11A55E0000000000000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		012E2B5F4A00F40976E1BC0B /* WatchCheckInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCheckInView.swift; sourceTree = "<group>"; };
+		1600BA87FD520C24056EDAC0 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		16FDB2D0634D43A021E0F390 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		393BAD6A329329DFDB4B0DB3 /* MorrowWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorrowWatchApp.swift; sourceTree = "<group>"; };
+		3ED3364F0048FA11122B66F0 /* BaselineAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaselineAnalyzer.swift; sourceTree = "<group>"; };
+		4CEECA6E4F329806CD8C085D /* WellnessModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WellnessModels.swift; sourceTree = "<group>"; };
+		6D255645F9DC174E59A557A3 /* WatchSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSessionManager.swift; sourceTree = "<group>"; };
+		712B73C5702A5023D34349F7 /* MorrowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorrowApp.swift; sourceTree = "<group>"; };
+		74A4C0A5D80928CBF0743874 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		76449714C6CAA9C524F1D9E0 /* LoadGaugeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadGaugeCard.swift; sourceTree = "<group>"; };
+		9BCD63975A9B3D8234A3061D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A6ACB78386343B63BB259722 /* CheckInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckInView.swift; sourceTree = "<group>"; };
+		A6B5DE78742386EE5CFE1897 /* RecommendationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationCard.swift; sourceTree = "<group>"; };
+		A74AD0FD4385A5D5FFBB223F /* MorrowWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MorrowWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC983B0A1343B391B2F39926 /* WatchSessionReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSessionReceiver.swift; sourceTree = "<group>"; };
+		D3F532714F3381C3CA95FDEA /* MetricCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricCard.swift; sourceTree = "<group>"; };
+		E46946B51DD975DF8C2C7659 /* Morrow.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Morrow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E8DED4169B24D2633D203F1C /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
+		EF7E1FCA991BDCC07A230829 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		F2DDE170E37504CDF06B41F1 /* CheckInHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckInHistoryView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		3E5D8075BCB6A5D19EE799F8 /* MorrowWatch */ = {
+			isa = PBXGroup;
+			children = (
+				0A11A55E0000000000000004 /* Assets.xcassets */,
+				B988E211B038A4A8A2CB973E /* Resources */,
+			);
+			path = MorrowWatch;
+			sourceTree = "<group>";
+		};
+		56B83109D4D1ADD7798DEC8E /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				3ED3364F0048FA11122B66F0 /* BaselineAnalyzer.swift */,
+				E8DED4169B24D2633D203F1C /* HealthStore.swift */,
+				CC983B0A1343B391B2F39926 /* WatchSessionReceiver.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		58BE918DDF5EAC3B57E83F7D /* apps */ = {
+			isa = PBXGroup;
+			children = (
+				5EA1118AFE7F90D9C555EF4A /* ios */,
+				C075A986D2F9F964A9529C3E /* watch */,
+			);
+			name = apps;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		5EA1118AFE7F90D9C555EF4A /* ios */ = {
+			isa = PBXGroup;
+			children = (
+				AA9335496775DF55B3A5A303 /* Sources */,
+			);
+			path = ios;
+			sourceTree = "<group>";
+		};
+		5F0E7E040C2CDAF7FFD26E1E /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F2DDE170E37504CDF06B41F1 /* CheckInHistoryView.swift */,
+				A6ACB78386343B63BB259722 /* CheckInView.swift */,
+				1600BA87FD520C24056EDAC0 /* DashboardView.swift */,
+				16FDB2D0634D43A021E0F390 /* SettingsView.swift */,
+				AFFAC6A733D063F9A5E4729B /* Components */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		767EE3FB9762885A2574785C /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				4CEECA6E4F329806CD8C085D /* WellnessModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		7FB9FE3BBAB6C022F8F2168D /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				74A4C0A5D80928CBF0743874 /* Theme.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		9C86598E7A2E4F3BDADB4903 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				9BCD63975A9B3D8234A3061D /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		AA9335496775DF55B3A5A303 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				712B73C5702A5023D34349F7 /* MorrowApp.swift */,
+				7FB9FE3BBAB6C022F8F2168D /* DesignSystem */,
+				767EE3FB9762885A2574785C /* Models */,
+				56B83109D4D1ADD7798DEC8E /* Services */,
+				5F0E7E040C2CDAF7FFD26E1E /* Views */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		AFFAC6A733D063F9A5E4729B /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				76449714C6CAA9C524F1D9E0 /* LoadGaugeCard.swift */,
+				D3F532714F3381C3CA95FDEA /* MetricCard.swift */,
+				A6B5DE78742386EE5CFE1897 /* RecommendationCard.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		B988E211B038A4A8A2CB973E /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				EF7E1FCA991BDCC07A230829 /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		C02B8FBD8C6E7AF5C2DA63FF /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				393BAD6A329329DFDB4B0DB3 /* MorrowWatchApp.swift */,
+				012E2B5F4A00F40976E1BC0B /* WatchCheckInView.swift */,
+				6D255645F9DC174E59A557A3 /* WatchSessionManager.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		C075A986D2F9F964A9529C3E /* watch */ = {
+			isa = PBXGroup;
+			children = (
+				C02B8FBD8C6E7AF5C2DA63FF /* Sources */,
+			);
+			path = watch;
+			sourceTree = "<group>";
+		};
+		CB5F65B523B5B34611ECE7D0 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E46946B51DD975DF8C2C7659 /* Morrow.app */,
+				A74AD0FD4385A5D5FFBB223F /* MorrowWatch.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CE38820A507058B059D7CF07 /* Morrow */ = {
+			isa = PBXGroup;
+			children = (
+				0A11A55E0000000000000003 /* Assets.xcassets */,
+				9C86598E7A2E4F3BDADB4903 /* Resources */,
+			);
+			path = Morrow;
+			sourceTree = "<group>";
+		};
+		D150D7D9A970C07A2FF4CABC = {
+			isa = PBXGroup;
+			children = (
+				58BE918DDF5EAC3B57E83F7D /* apps */,
+				CE38820A507058B059D7CF07 /* Morrow */,
+				3E5D8075BCB6A5D19EE799F8 /* MorrowWatch */,
+				CB5F65B523B5B34611ECE7D0 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		083A931CEF1240FD851FB03A /* MorrowWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B35AC10678336D3972839976 /* Build configuration list for PBXNativeTarget "MorrowWatch" */;
+			buildPhases = (
+				34C57F01146B1A143F3C3B63 /* Sources */,
+				BED93E0E1BDA4F5CDCA2FEAB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MorrowWatch;
+			packageProductDependencies = (
+			);
+			productName = MorrowWatch;
+			productReference = A74AD0FD4385A5D5FFBB223F /* MorrowWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		76A4FAF56917169CBCFF9398 /* Morrow */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7C4C707D2EF9A94A4F7B5AF2 /* Build configuration list for PBXNativeTarget "Morrow" */;
+			buildPhases = (
+				BB8FC3D05752B7AA48F634EC /* Sources */,
+				2D0EEA0F1A37BE42D484A5D1 /* Resources */,
+				FF02E2354D9A5D50C6496D9A /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				370CF63EAFA8D6ECAEB10F6E /* PBXTargetDependency */,
+			);
+			name = Morrow;
+			packageProductDependencies = (
+			);
+			productName = Morrow;
+			productReference = E46946B51DD975DF8C2C7659 /* Morrow.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		756FB3F814EB341887BA7FCA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					083A931CEF1240FD851FB03A = {
+						DevelopmentTeam = 4UTM2VZ53U;
+						ProvisioningStyle = Automatic;
+					};
+					76A4FAF56917169CBCFF9398 = {
+						DevelopmentTeam = 4UTM2VZ53U;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = BBDD6D6528B07D5173209345 /* Build configuration list for PBXProject "Morrow" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D150D7D9A970C07A2FF4CABC;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CB5F65B523B5B34611ECE7D0 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				76A4FAF56917169CBCFF9398 /* Morrow */,
+				083A931CEF1240FD851FB03A /* MorrowWatch */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		2D0EEA0F1A37BE42D484A5D1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A11A55E0000000000000001 /* Assets.xcassets in Resources */,
+				BE4A0C16EFB70CA3B23F742E /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BED93E0E1BDA4F5CDCA2FEAB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A11A55E0000000000000002 /* Assets.xcassets in Resources */,
+				3B4D7C2905A0FA4F8520EE95 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		34C57F01146B1A143F3C3B63 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				351D9EE971AC5E06F25C7505 /* MorrowWatchApp.swift in Sources */,
+				C80ECCD53C84446BF3B17F7B /* WatchCheckInView.swift in Sources */,
+				65E7C0547D77ABABA83522FB /* WatchSessionManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB8FC3D05752B7AA48F634EC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				23C389B1C0F1B00314302F9B /* BaselineAnalyzer.swift in Sources */,
+				8F0D03CCACF6AFE7C8F73A9D /* CheckInHistoryView.swift in Sources */,
+				8A39DF8732CA509D13382861 /* CheckInView.swift in Sources */,
+				F58AAB5D586550302DD0583D /* DashboardView.swift in Sources */,
+				496B6BD2FD1BCE73862BC7AA /* HealthStore.swift in Sources */,
+				7E3F0C6D19D4D441A74700D7 /* LoadGaugeCard.swift in Sources */,
+				8F7211945F43F0FD448DA202 /* MetricCard.swift in Sources */,
+				F06E6259A286049FA5833268 /* MorrowApp.swift in Sources */,
+				AC3F5CE4BF88C6FA9683C12E /* RecommendationCard.swift in Sources */,
+				414063D00A9390521B2320C0 /* SettingsView.swift in Sources */,
+				1BE187E0EB2E018B8CFA7EB5 /* Theme.swift in Sources */,
+				52008737558B0BBDA35195EF /* WatchSessionReceiver.swift in Sources */,
+				4EFBB0768EF4C44FE24CDA24 /* WellnessModels.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		370CF63EAFA8D6ECAEB10F6E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 083A931CEF1240FD851FB03A /* MorrowWatch */;
+			targetProxy = F6A0E0F349DC1F4C95E9EE9E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1980ACA48BFE06EBCC4A1D1A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Morrow/Morrow.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Morrow/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.qlsl1198.morrowwellness;
+				PRODUCT_NAME = Morrow;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		2DB963D51EDECC719062C958 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 4UTM2VZ53U;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		40708B5983D40FA115F29627 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				INFOPLIST_FILE = MorrowWatch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.qlsl1198.morrowwellness.watchkitapp;
+				PRODUCT_NAME = "Morrow Watch";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Release;
+		};
+		46B71354CFFA5582727B13C0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Morrow/Morrow.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Morrow/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.qlsl1198.morrowwellness;
+				PRODUCT_NAME = Morrow;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		7AF148952FB417AB7193BC2E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 4UTM2VZ53U;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		D0D142EE636181B5562E4BE5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				INFOPLIST_FILE = MorrowWatch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.qlsl1198.morrowwellness.watchkitapp;
+				PRODUCT_NAME = "Morrow Watch";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		7C4C707D2EF9A94A4F7B5AF2 /* Build configuration list for PBXNativeTarget "Morrow" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1980ACA48BFE06EBCC4A1D1A /* Debug */,
+				46B71354CFFA5582727B13C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B35AC10678336D3972839976 /* Build configuration list for PBXNativeTarget "MorrowWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0D142EE636181B5562E4BE5 /* Debug */,
+				40708B5983D40FA115F29627 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BBDD6D6528B07D5173209345 /* Build configuration list for PBXProject "Morrow" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7AF148952FB417AB7193BC2E /* Debug */,
+				2DB963D51EDECC719062C958 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 756FB3F814EB341887BA7FCA /* Project object */;
+}
