@@ -11,7 +11,7 @@ watch/    SwiftUI watchOS 소스
 apple/    Xcode 프로젝트와 iOS·watchOS 타깃 설정
 ```
 
-백엔드 API는 [AISH-Official/morrow-backend](https://github.com/AISH-Official/morrow-backend), 통합 문서와 전체 아키텍처는 [AISH-Official/morrow-wellness](https://github.com/AISH-Official/morrow-wellness)에서 관리합니다.
+백엔드 API는 [AISH-Official/morrow-backend](https://github.com/AISH-Official/morrow-backend), 통합 문서와 전체 아키텍처는 [AISH-Official/morrow-docs](https://github.com/AISH-Official/morrow-docs)에서 관리합니다.
 
 ## 웹 실행
 
@@ -44,4 +44,3 @@ xcodebuild -project apple/Morrow.xcodeproj -scheme Morrow \
 ```
 
 `main` 푸시와 Pull Request에서 웹·Apple 클라이언트 CI가 실행되고, 웹 변경은 GitHub Pages로 자동 배포됩니다.
-
