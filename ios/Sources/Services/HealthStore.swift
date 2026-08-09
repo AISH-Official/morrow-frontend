@@ -16,9 +16,16 @@ final class HealthStore: ObservableObject {
         if isStoreScreenshotMode {
             snapshot = HealthSnapshot(
                 sleepMinutes: 405,
+                heartRate: 76,
                 restingHeartRate: 72,
                 hrv: 38,
                 steps: 4_286,
+                activeEnergyKcal: 318,
+                exerciseMinutes: 24,
+                distanceMeters: 3_400,
+                flightsClimbed: 7,
+                respiratoryRate: 15.2,
+                oxygenSaturationPercent: 98,
                 baselineSleepMinutes: 445,
                 baselineRestingHeartRate: 67,
                 baselineHRV: 47,
@@ -35,7 +42,11 @@ final class HealthStore: ObservableObject {
             authorizationMessage = "이 기기에서는 HealthKit을 사용할 수 없습니다."
             return
         }
-        let identifiers: [HKQuantityTypeIdentifier] = [.heartRate, .restingHeartRate, .heartRateVariabilitySDNN, .stepCount]
+        let identifiers: [HKQuantityTypeIdentifier] = [
+            .heartRate, .restingHeartRate, .heartRateVariabilitySDNN, .stepCount,
+            .activeEnergyBurned, .appleExerciseTime, .distanceWalkingRunning, .flightsClimbed,
+            .respiratoryRate, .oxygenSaturation
+        ]
         let quantityTypes = identifiers.compactMap(HKQuantityType.quantityType(forIdentifier:))
         guard let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return }
         isLoading = true
@@ -60,24 +71,38 @@ final class HealthStore: ObservableObject {
         let startOfToday = calendar.startOfDay(for: now)
         let weekStart = calendar.date(byAdding: .day, value: -8, to: startOfToday) ?? startOfToday
         async let steps = cumulativeQuantity(.stepCount, unit: .count(), from: startOfToday, to: now)
+        async let activeEnergy = cumulativeQuantity(.activeEnergyBurned, unit: .kilocalorie(), from: startOfToday, to: now)
+        async let exercise = cumulativeQuantity(.appleExerciseTime, unit: .minute(), from: startOfToday, to: now)
+        async let distance = cumulativeQuantity(.distanceWalkingRunning, unit: .meter(), from: startOfToday, to: now)
+        async let flights = cumulativeQuantity(.flightsClimbed, unit: .count(), from: startOfToday, to: now)
+        async let heart = latestQuantity(.heartRate, unit: HKUnit.count().unitDivided(by: .minute()))
         async let resting = latestQuantity(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()))
         async let hrv = latestQuantity(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli))
+        async let respiratory = latestQuantity(.respiratoryRate, unit: HKUnit.count().unitDivided(by: .minute()))
+        async let oxygen = latestQuantity(.oxygenSaturation, unit: .percent())
         async let restingBaseline = averageQuantity(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()), from: weekStart, to: startOfToday)
         async let hrvBaseline = averageQuantity(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli), from: weekStart, to: startOfToday)
         let sleepTotals = try await sleepMinutesByDay(type: sleepType, from: weekStart, to: now)
         let todaySleep = sleepTotals[startOfToday] ?? sleepTotals.keys.sorted().last.flatMap { sleepTotals[$0] } ?? 0
         let pastValues = sleepTotals.filter { $0.key < startOfToday && $0.value > 0 }.map(\.value)
         let sleepBaseline = pastValues.isEmpty ? 0 : pastValues.reduce(0, +) / pastValues.count
-        let values = try await (steps, resting, hrv, restingBaseline, hrvBaseline)
+        let values = try await (steps, activeEnergy, exercise, distance, flights, heart, resting, hrv, respiratory, oxygen, restingBaseline, hrvBaseline)
         return HealthSnapshot(
             sleepMinutes: todaySleep,
-            restingHeartRate: values.1 ?? 0,
-            hrv: values.2 ?? 0,
+            heartRate: values.5 ?? 0,
+            restingHeartRate: values.6 ?? 0,
+            hrv: values.7 ?? 0,
             steps: values.0 ?? 0,
+            activeEnergyKcal: values.1 ?? 0,
+            exerciseMinutes: values.2 ?? 0,
+            distanceMeters: values.3 ?? 0,
+            flightsClimbed: values.4 ?? 0,
+            respiratoryRate: values.8 ?? 0,
+            oxygenSaturationPercent: (values.9 ?? 0) * 100,
             baselineSleepMinutes: sleepBaseline,
-            baselineRestingHeartRate: values.3 ?? 0,
-            baselineHRV: values.4 ?? 0,
-            hasHealthData: todaySleep > 0 || (values.0 ?? 0) > 0 || (values.1 ?? 0) > 0 || (values.2 ?? 0) > 0
+            baselineRestingHeartRate: values.10 ?? 0,
+            baselineHRV: values.11 ?? 0,
+            hasHealthData: todaySleep > 0 || (values.0 ?? 0) > 0 || (values.5 ?? 0) > 0 || (values.7 ?? 0) > 0
         )
     }
 

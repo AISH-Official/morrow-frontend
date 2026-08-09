@@ -9,6 +9,9 @@ struct WatchWellnessContext {
     var hrv = "38 ms"
     var heart = "72 bpm"
     var steps = "4,286"
+    var energy = "318 kcal"
+    var exercise = "24분"
+    var respiratory = "15.2회/분"
     var recommendation = "7분 동안 가볍게 걸어보세요"
     var updatedAt = Date()
 }
@@ -50,6 +53,19 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
         ])
     }
 
+    func sendHealthSummary(_ snapshot: WatchHealthSnapshot) {
+        guard WCSession.default.activationState == .activated, snapshot.hasData else { return }
+        WCSession.default.transferUserInfo([
+            "kind": "healthSummary",
+            "heartRate": snapshot.heartRate,
+            "hrv": snapshot.hrv,
+            "steps": snapshot.steps,
+            "activeEnergyKcal": snapshot.activeEnergyKcal,
+            "exerciseMinutes": snapshot.exerciseMinutes,
+            "recordedAt": ISO8601DateFormatter().string(from: Date())
+        ])
+    }
+
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         apply(applicationContext)
     }
@@ -74,6 +90,9 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
                 hrv: values["hrv"] as? String ?? self.context.hrv,
                 heart: values["heart"] as? String ?? self.context.heart,
                 steps: values["steps"] as? String ?? self.context.steps,
+                energy: values["energy"] as? String ?? self.context.energy,
+                exercise: values["exercise"] as? String ?? self.context.exercise,
+                respiratory: values["respiratory"] as? String ?? self.context.respiratory,
                 recommendation: values["recommendation"] as? String ?? self.context.recommendation,
                 updatedAt: (values["updatedAt"] as? String).flatMap(ISO8601DateFormatter().date(from:)) ?? .now
             )

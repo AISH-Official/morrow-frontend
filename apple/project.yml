@@ -46,6 +46,8 @@ targets:
       - path: MorrowWatch/Assets.xcassets
     info:
       path: MorrowWatch/Info.plist
+    entitlements:
+      path: MorrowWatch/MorrowWatch.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.qlsl1198.morrowwellness.watchkitapp

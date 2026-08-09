@@ -3,6 +3,7 @@ import SwiftData
 
 struct DashboardView: View {
     @EnvironmentObject private var health: HealthStore
+    @EnvironmentObject private var syncService: MorrowSyncService
     @Query(sort: \CheckInRecord.recordedAt, order: .reverse) private var checkIns: [CheckInRecord]
     private let analyzer = BaselineAnalyzer()
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
@@ -22,6 +23,10 @@ struct DashboardView: View {
                         MetricCard(title: "HRV", value: health.snapshot.hrvText, icon: "waveform.path.ecg", tint: Theme.accent)
                         MetricCard(title: "안정 심박", value: health.snapshot.restingHeartRateText, icon: "heart.fill", tint: Color(red: 255 / 255, green: 105 / 255, blue: 114 / 255))
                         MetricCard(title: "걸음", value: health.snapshot.stepsText, icon: "figure.walk", tint: Theme.mint)
+                        MetricCard(title: "활동 에너지", value: health.snapshot.activeEnergyText, icon: "flame.fill", tint: .orange)
+                        MetricCard(title: "운동", value: health.snapshot.exerciseText, icon: "figure.run", tint: Theme.mint)
+                        MetricCard(title: "이동 거리", value: health.snapshot.distanceText, icon: "map.fill", tint: Theme.accent)
+                        MetricCard(title: "호흡수", value: health.snapshot.respiratoryText, icon: "lungs.fill", tint: .cyan)
                     }
 
                     RecommendationCard(title: "7분 동안 가볍게 걸어보세요", rationale: "수면 회복이 낮은 날에는 강한 운동보다 짧은 움직임이 리듬을 되찾는 데 부담이 적어요.")
@@ -69,7 +74,7 @@ struct DashboardView: View {
             Spacer()
             HStack(spacing: 6) {
                 Circle().fill(Theme.mint).frame(width: 6, height: 6).shadow(color: Theme.mint, radius: 5)
-                Text("ON DEVICE").font(.system(size: 8, weight: .medium, design: .monospaced))
+                Text(syncService.statusText).font(.system(size: 8, weight: .medium, design: .monospaced)).lineLimit(1)
             }
             .foregroundStyle(Theme.textSecondary)
             .padding(.horizontal, 10).padding(.vertical, 7)

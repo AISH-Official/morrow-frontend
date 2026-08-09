@@ -3,9 +3,16 @@ import SwiftData
 
 struct HealthSnapshot {
     var sleepMinutes: Int = 0
+    var heartRate: Double = 0
     var restingHeartRate: Double = 0
     var hrv: Double = 0
     var steps: Double = 0
+    var activeEnergyKcal: Double = 0
+    var exerciseMinutes: Double = 0
+    var distanceMeters: Double = 0
+    var flightsClimbed: Double = 0
+    var respiratoryRate: Double = 0
+    var oxygenSaturationPercent: Double = 0
     var baselineSleepMinutes: Int = 0
     var baselineRestingHeartRate: Double = 0
     var baselineHRV: Double = 0
@@ -19,6 +26,7 @@ struct HealthSnapshot {
     }
 
     var hrvText: String { hrv > 0 ? "\(Int(hrv)) ms" : "--" }
+    var heartRateText: String { heartRate > 0 ? "\(Int(heartRate)) bpm" : "--" }
     var restingHeartRateText: String { restingHeartRate > 0 ? "\(Int(restingHeartRate)) bpm" : "--" }
     var stepsText: String {
         guard steps > 0 else { return "--" }
@@ -26,6 +34,11 @@ struct HealthSnapshot {
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: Int(steps))) ?? "\(Int(steps))"
     }
+    var activeEnergyText: String { activeEnergyKcal > 0 ? "\(Int(activeEnergyKcal)) kcal" : "--" }
+    var exerciseText: String { exerciseMinutes > 0 ? "\(Int(exerciseMinutes))분" : "--" }
+    var distanceText: String { distanceMeters > 0 ? String(format: "%.1f km", distanceMeters / 1_000) : "--" }
+    var respiratoryText: String { respiratoryRate > 0 ? String(format: "%.1f회/분", respiratoryRate) : "--" }
+    var oxygenText: String { oxygenSaturationPercent > 0 ? "\(Int(oxygenSaturationPercent))%" : "--" }
 }
 
 enum CheckInSource: String, Codable, CaseIterable {

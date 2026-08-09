@@ -14,7 +14,7 @@ export type Recommendation={id:string;title:string;rationale:string};
 export type Dashboard={
  wellnessLoad:string;
  score:number;
- metrics:{sleepMinutes:number;restingHeartRate:number;hrv:number;steps:number};
+ metrics:{sleepMinutes:number;restingHeartRate:number;hrv:number;steps:number;activeEnergyKcal:number;exerciseMinutes:number};
  timeline:TimelineItem[];
  recommendation:Recommendation|null;
  disclaimer:string;

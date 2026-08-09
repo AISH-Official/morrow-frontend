@@ -6,7 +6,7 @@ const REQUEST_TIMEOUT=5000;
 export const demo:Dashboard={
  wellnessLoad:'HIGHER_THAN_USUAL',
  score:68,
- metrics:{sleepMinutes:348,restingHeartRate:72,hrv:41,steps:4821},
+ metrics:{sleepMinutes:348,restingHeartRate:72,hrv:41,steps:4821,activeEnergyKcal:318,exerciseMinutes:24},
  timeline:[
   {id:'sleep',time:'08:10',title:'수면 회복이 평소보다 낮음',detail:'최근 7일 평균보다 1시간 12분 짧았어요.',kind:'sleep',userConfirmed:false},
   {id:'checkin',time:'13:40',title:'Watch 상태 체크인',detail:'피로 · 원인: 수면 부족',kind:'checkin',userConfirmed:true},

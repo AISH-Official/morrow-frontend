@@ -24,6 +24,8 @@ enum WatchCause: String, CaseIterable, Identifiable {
 
 struct WatchCheckInView: View {
     @EnvironmentObject private var session: WatchSessionManager
+    @EnvironmentObject private var health: WatchHealthStore
+    @EnvironmentObject private var notifications: WatchNotificationManager
 
     var body: some View {
         NavigationStack {
@@ -43,6 +45,13 @@ struct WatchCheckInView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .tint(WatchTheme.accent)
+        .task {
+            await health.requestAuthorizationAndLoad()
+            session.sendHealthSummary(health.snapshot)
+            await notifications.configure()
+            await notifications.recoveryAlert(load: session.context.load)
+        }
+        .onChange(of: session.context.load) { _, load in Task { await notifications.recoveryAlert(load: load) } }
     }
 
     private var brandHeader: some View {
@@ -76,11 +85,19 @@ struct WatchCheckInView: View {
     }
 
     private var signalGrid: some View {
-        HStack(spacing: 6) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
             miniSignal("수면", session.context.sleep, "bed.double.fill")
-            miniSignal("HRV", session.context.hrv, "waveform.path.ecg")
-            miniSignal("심박", session.context.heart, "heart.fill")
+            miniSignal("HRV", health.snapshot.hrv > 0 ? "\(Int(health.snapshot.hrv)) ms" : session.context.hrv, "waveform.path.ecg")
+            miniSignal("심박", health.snapshot.heartRate > 0 ? "\(Int(health.snapshot.heartRate)) bpm" : session.context.heart, "heart.fill")
+            miniSignal("걸음", health.snapshot.steps > 0 ? formatted(health.snapshot.steps) : session.context.steps, "figure.walk")
+            miniSignal("활동", health.snapshot.activeEnergyKcal > 0 ? "\(Int(health.snapshot.activeEnergyKcal)) kcal" : session.context.energy, "flame.fill")
+            miniSignal("운동", health.snapshot.exerciseMinutes > 0 ? "\(Int(health.snapshot.exerciseMinutes))분" : session.context.exercise, "figure.run")
         }
+    }
+
+    private func formatted(_ value: Double) -> String {
+        let formatter = NumberFormatter(); formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: Int(value))) ?? "\(Int(value))"
     }
 
     private func miniSignal(_ title: String, _ value: String, _ icon: String) -> some View {
@@ -101,9 +118,13 @@ struct WatchCheckInView: View {
     }
 
     private var actionGrid: some View {
-        HStack(spacing: 7) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)], spacing: 7) {
             NavigationLink(destination: QuickCheckInView()) { action("체크인", "plus.circle.fill", WatchTheme.accent) }.buttonStyle(.plain)
             NavigationLink(destination: RecoverySessionView()) { action("1분 회복", "wind", WatchTheme.mint) }.buttonStyle(.plain)
+            Button {
+                Task { await health.requestAuthorizationAndLoad(); session.sendHealthSummary(health.snapshot) }
+            } label: { action("데이터 갱신", "arrow.clockwise.heart.fill", .orange) }.buttonStyle(.plain)
+            NavigationLink(destination: WatchNotificationSettingsView()) { action("알림", "bell.badge.fill", .purple) }.buttonStyle(.plain)
         }
     }
 
@@ -117,6 +138,20 @@ struct WatchCheckInView: View {
             HStack { Image(systemName: "checkmark.circle.fill").foregroundStyle(WatchTheme.mint); VStack(alignment: .leading) { Text("최근 \(recent.status) · \(recent.cause)").font(.caption2.weight(.semibold)); Text(recent.recordedAt.formatted(date: .omitted, time: .shortened)).font(.system(size: 8, design: .monospaced)).foregroundStyle(WatchTheme.muted) }; Spacer() }
                 .padding(9).background(WatchTheme.panel, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+}
+
+private struct WatchNotificationSettingsView: View {
+    @EnvironmentObject private var notifications: WatchNotificationManager
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                Image(systemName: "bell.badge.fill").font(.system(size: 32)).foregroundStyle(WatchTheme.accent)
+                Text(notifications.statusText).font(.headline).multilineTextAlignment(.center)
+                Text("매일 체크인 2회와 높은 회복 부하 알림을 Watch에서 직접 예약합니다.").font(.caption2).foregroundStyle(WatchTheme.muted).multilineTextAlignment(.center)
+                Button("알림 다시 설정") { Task { await notifications.configure() } }.buttonStyle(.borderedProminent).tint(WatchTheme.accent)
+            }.padding(.vertical, 10)
+        }.navigationTitle("알림")
     }
 }
 
