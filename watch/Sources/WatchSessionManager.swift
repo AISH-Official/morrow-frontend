@@ -26,6 +26,8 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var context = WatchWellnessContext()
     @Published private(set) var recentCheckIn: WatchRecentCheckIn?
     @Published private(set) var isConnected = false
+    @Published private(set) var isServerConnected = false
+    @Published private(set) var pairingCode = ""
 
     override init() {
         super.init()
@@ -82,7 +84,15 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private func apply(_ values: [String: Any]) {
+        if let apiRoot = values["apiRoot"] as? String,
+           let userId = values["userId"] as? String,
+           let accessToken = values["accessToken"] as? String {
+            let connection = WatchServerConnection(apiRoot: apiRoot, userId: userId, accessToken: accessToken)
+            Task { await WatchPushRegistrar.shared.updateConnection(connection) }
+        }
         DispatchQueue.main.async {
+            self.isServerConnected = values["apiRoot"] as? String != nil && values["accessToken"] as? String != nil
+            self.pairingCode = values["pairingCode"] as? String ?? self.pairingCode
             self.context = WatchWellnessContext(
                 load: values["load"] as? Int ?? self.context.load,
                 summary: values["summary"] as? String ?? self.context.summary,

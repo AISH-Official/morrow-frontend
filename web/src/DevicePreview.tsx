@@ -8,7 +8,7 @@ export default function DevicePreview(){
  const moveCrown=(direction:number)=>setWatchPage(page=>Math.max(0,Math.min(2,page+direction)));
  const watchOnly=new URLSearchParams(location.search).get('watch')==='1';
  return <div className={`preview-page ${watchOnly?'watch-only-preview':''}`}>
-  <div className="preview-glow"/><header className="preview-header"><a href={watchOnly?'/device-preview':'/'}><ArrowLeft/>{watchOnly?'전체 기기':'PC 화면'}</a><div><b>{watchOnly?'WATCH EXPERIENCE':'DEVICE EXPERIENCE'}</b><span>{watchOnly?'Crown-first glanceable interaction':'iPhone & Apple Watch design preview'}</span></div><div className="preview-badge"><ShieldCheck/> WELLNESS ONLY</div></header>
+  <div className="preview-glow"/><header className="preview-header"><a href={watchOnly?`${import.meta.env.BASE_URL}device-preview/`:import.meta.env.BASE_URL}><ArrowLeft/>{watchOnly?'전체 기기':'PC 화면'}</a><div><b>{watchOnly?'WATCH EXPERIENCE':'DEVICE EXPERIENCE'}</b><span>{watchOnly?'Crown-first glanceable interaction':'iPhone & Apple Watch design preview'}</span></div><div className="preview-badge"><ShieldCheck/> WELLNESS ONLY</div></header>
   <main className="devices-stage">
    {!watchOnly&&<section className="device-column"><div className="device-label"><span>01</span><div><b>iPhone</b><small>분석 · 대화 · 회복 가이드</small></div></div>
     <div className={`iphone ${phoneListening?'phone-listening':''}`}><div className="iphone-screen"><div className="dynamic-island"/><div className="phone-top"><span>9:41</span><b>MORROW</b><MoreHorizontal/></div>

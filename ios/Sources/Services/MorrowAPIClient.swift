@@ -2,7 +2,7 @@ import Foundation
 import Security
 import UIKit
 
-struct MorrowCredentials: Codable {
+struct MorrowCredentials: Codable, Equatable {
     let userId: String
     let accessToken: String
     let pairingCode: String
@@ -48,15 +48,8 @@ actor MorrowAPIClient {
     }
 
     func send<T: Encodable>(_ value: T, path: String, method: String = "POST") async throws {
-        let credentials = try await credentials()
-        guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
-        var request = URLRequest(url: root.appending(path: path))
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try encoder.encode(value)
-        let (_, response) = try await URLSession.shared.data(for: request)
-        try validate(response)
+        let body = try encoder.encode(value)
+        try await performSend(body: body, path: path, method: method, canRefresh: true)
     }
 
     func registerPushToken(_ token: String) async throws {
@@ -73,6 +66,27 @@ actor MorrowAPIClient {
         DeviceCredentialStore.clear()
     }
 
+    func pair(using pairingCode: String) async throws -> MorrowCredentials {
+        guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
+        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? persistentInstallationId()
+        let payload = PairDeviceRequest(
+            pairingCode: pairingCode.trimmingCharacters(in: .whitespacesAndNewlines),
+            deviceId: "ios-\(deviceId)",
+            deviceName: UIDevice.current.name,
+            platform: "IOS"
+        )
+        var request = URLRequest(url: root.appending(path: "auth/pair"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        let value = try decoder.decode(MorrowCredentials.self, from: data)
+        cachedCredentials = value
+        DeviceCredentialStore.save(value)
+        return value
+    }
+
     private var pushEnvironment: String {
         #if DEBUG
         return "SANDBOX"
@@ -85,6 +99,24 @@ actor MorrowAPIClient {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
     }
 
+    private func performSend(body: Data, path: String, method: String, canRefresh: Bool) async throws {
+        let credentials = try await credentials()
+        guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
+        var request = URLRequest(url: root.appending(path: path))
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        let (_, response) = try await URLSession.shared.data(for: request)
+        if canRefresh, let http = response as? HTTPURLResponse, http.statusCode == 401 {
+            cachedCredentials = nil
+            DeviceCredentialStore.clear()
+            try await performSend(body: body, path: path, method: method, canRefresh: false)
+            return
+        }
+        try validate(response)
+    }
+
     private func persistentInstallationId() -> String {
         let key = "morrow.installation.id"
         if let value = UserDefaults.standard.string(forKey: key) { return value }
@@ -92,6 +124,7 @@ actor MorrowAPIClient {
     }
 
     private struct RegisterDeviceRequest: Encodable { let deviceId, deviceName, platform: String; let userId: String? }
+    private struct PairDeviceRequest: Encodable { let pairingCode, deviceId, deviceName, platform: String }
     private struct PushDeviceRequest: Encodable { let userId, deviceToken, platform, environment: String }
 }
 

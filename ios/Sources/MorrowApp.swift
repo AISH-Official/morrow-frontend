@@ -1,9 +1,11 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import UIKit
 
 @main
 struct MorrowApp: App {
+    @UIApplicationDelegateAdaptor(MorrowAppDelegate.self) private var appDelegate
     @StateObject private var healthStore = HealthStore()
     @StateObject private var syncService = MorrowSyncService()
     @StateObject private var notificationManager = PhoneNotificationManager()
@@ -75,6 +77,11 @@ private struct RootView: View {
             snapshot: healthStore.snapshot,
             recommendation: "7분 동안 가볍게 걸어보세요"
         )
+        Task {
+            if let connection = try? await MorrowAPIClient.shared.connectionContext() {
+                watchReceiver.sendConnectionContext(apiRoot: connection.apiRoot, credentials: connection.credentials)
+            }
+        }
     }
 
     private func synchronize() async {
@@ -98,12 +105,7 @@ private struct RootView: View {
 final class MorrowSyncService: ObservableObject {
     enum State { case idle, syncing, synced(Date), failed(String) }
     @Published private(set) var state: State = .idle
-    private let encoder: JSONEncoder = { let value = JSONEncoder(); value.dateEncodingStrategy = .iso8601; return value }()
-    private var apiRoot: URL? {
-        let configured = Bundle.main.object(forInfoDictionaryKey: "MORROW_API_BASE_URL") as? String
-        return URL(string: configured?.isEmpty == false ? configured! : "http://localhost:8080/api/v1")
-    }
-    private var userId: String { (Bundle.main.object(forInfoDictionaryKey: "MORROW_USER_ID") as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "default-user" }
+    private let client = MorrowAPIClient.shared
 
     var statusText: String {
         switch state {
@@ -115,7 +117,6 @@ final class MorrowSyncService: ObservableObject {
     }
 
     func synchronize(checkIns: [CheckInRecord], snapshot: HealthSnapshot?) async {
-        guard apiRoot != nil else { state = .failed("API 주소 없음"); return }
         state = .syncing
         do {
             for record in checkIns { try await upload(record) }
@@ -129,9 +130,10 @@ final class MorrowSyncService: ObservableObject {
     func synchronizeWatch(_ summary: IncomingWatchHealthSummary) async {
         state = .syncing
         do {
+            let credentials = try await client.credentials()
             let bucket = Int(summary.recordedAt.timeIntervalSince1970 / 300)
             let payload = HealthPayload(
-                userId: userId, clientSnapshotId: "watch-\(bucket)", source: "WATCH", sleepMinutes: 0,
+                userId: credentials.userId, clientSnapshotId: "watch-\(bucket)", source: "WATCH", sleepMinutes: 0,
                 heartRate: summary.heartRate, restingHeartRate: 0, hrv: summary.hrv, steps: summary.steps,
                 activeEnergyKcal: summary.activeEnergyKcal, exerciseMinutes: summary.exerciseMinutes,
                 distanceMeters: 0, flightsClimbed: 0, respiratoryRate: 0, oxygenSaturationPercent: 0,
@@ -143,8 +145,9 @@ final class MorrowSyncService: ObservableObject {
     }
 
     private func upload(_ record: CheckInRecord) async throws {
+        let credentials = try await client.credentials()
         let payload = CheckInPayload(
-            userId: userId, clientEventId: record.id.uuidString,
+            userId: credentials.userId, clientEventId: record.id.uuidString,
             status: record.status.apiValue, cause: record.cause?.apiValue,
             note: record.note, source: record.source == .watch ? "WATCH" : "IPHONE", recordedAt: record.recordedAt
         )
@@ -152,9 +155,10 @@ final class MorrowSyncService: ObservableObject {
     }
 
     private func upload(_ snapshot: HealthSnapshot) async throws {
+        let credentials = try await client.credentials()
         let bucket = Int(Date().timeIntervalSince1970 / 300)
         let payload = HealthPayload(
-            userId: userId, clientSnapshotId: "iphone-\(bucket)", source: "IPHONE",
+            userId: credentials.userId, clientSnapshotId: "iphone-\(bucket)", source: "IPHONE",
             sleepMinutes: snapshot.sleepMinutes, heartRate: snapshot.heartRate, restingHeartRate: snapshot.restingHeartRate,
             hrv: snapshot.hrv, steps: snapshot.steps, activeEnergyKcal: snapshot.activeEnergyKcal,
             exerciseMinutes: snapshot.exerciseMinutes, distanceMeters: snapshot.distanceMeters,
@@ -165,13 +169,7 @@ final class MorrowSyncService: ObservableObject {
     }
 
     private func post<T: Encodable>(_ value: T, path: String) async throws {
-        guard let url = apiRoot?.appending(path: path) else { throw URLError(.badURL) }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try encoder.encode(value)
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
+        try await client.send(value, path: path)
     }
 
     private struct CheckInPayload: Encodable { let userId, clientEventId, status: String; let cause: String?; let note, source: String; let recordedAt: Date }
@@ -195,6 +193,7 @@ final class PhoneNotificationManager: ObservableObject {
         do {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             statusText = granted ? "iPhone 알림 켜짐" : "iPhone 설정에서 알림을 허용해 주세요"
+            if granted { UIApplication.shared.registerForRemoteNotifications() }
         } catch { statusText = "알림 권한을 확인할 수 없습니다" }
     }
 

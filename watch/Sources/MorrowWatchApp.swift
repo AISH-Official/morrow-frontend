@@ -1,9 +1,11 @@
 import SwiftUI
 import HealthKit
 import UserNotifications
+import WatchKit
 
 @main
 struct MorrowWatchApp: App {
+    @WKExtensionDelegateAdaptor(MorrowWatchExtensionDelegate.self) private var extensionDelegate
     @StateObject private var session = WatchSessionManager()
     @StateObject private var health = WatchHealthStore()
     @StateObject private var notifications = WatchNotificationManager.shared
@@ -92,6 +94,7 @@ final class WatchNotificationManager: ObservableObject {
             let granted = try await center.requestAuthorization(options: [.alert, .sound])
             statusText = granted ? "Watch 알림 켜짐" : "Watch 설정에서 알림 허용 필요"
             guard granted else { return }
+            WKExtension.shared().registerForRemoteNotifications()
             center.removePendingNotificationRequests(withIdentifiers: ["morrow.watch.morning", "morrow.watch.evening"])
             await daily("morrow.watch.morning", 10, 5, "오늘 컨디션은 어떤가요?", "손목에서 30초 체크인을 남겨주세요.")
             await daily("morrow.watch.evening", 20, 35, "오늘의 회복 기록", "몸의 느낌을 기록하면 내일 제안이 더 정확해져요.")

@@ -45,7 +45,8 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
     }
 
     func sendWellnessContext(load: Int, summary: String, snapshot: HealthSnapshot, recommendation: String) {
-        let context: [String: Any] = [
+        var context: [String: Any] = pendingContext ?? [:]
+        context.merge([
             "load": load,
             "summary": summary,
             "sleep": snapshot.sleepText,
@@ -57,7 +58,18 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
             "respiratory": snapshot.respiratoryText,
             "recommendation": recommendation,
             "updatedAt": ISO8601DateFormatter().string(from: Date())
-        ]
+        ], uniquingKeysWith: { _, new in new })
+        pendingContext = context
+        guard WCSession.default.activationState == .activated else { return }
+        try? WCSession.default.updateApplicationContext(context)
+    }
+
+    func sendConnectionContext(apiRoot: String, credentials: MorrowCredentials) {
+        var context = pendingContext ?? [:]
+        context["apiRoot"] = apiRoot
+        context["userId"] = credentials.userId
+        context["accessToken"] = credentials.accessToken
+        context["pairingCode"] = credentials.pairingCode
         pendingContext = context
         guard WCSession.default.activationState == .activated else { return }
         try? WCSession.default.updateApplicationContext(context)

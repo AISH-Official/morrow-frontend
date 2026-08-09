@@ -62,8 +62,8 @@ struct WatchCheckInView: View {
             }
             Spacer()
             HStack(spacing: 4) {
-                Circle().fill(session.isConnected ? WatchTheme.mint : .orange).frame(width: 6, height: 6).shadow(color: session.isConnected ? WatchTheme.mint : .orange, radius: 4)
-                Text(session.isConnected ? "SYNC" : "LOCAL").font(.system(size: 6, weight: .medium, design: .monospaced)).foregroundStyle(WatchTheme.muted)
+                Circle().fill(session.isServerConnected ? WatchTheme.mint : .orange).frame(width: 6, height: 6).shadow(color: session.isServerConnected ? WatchTheme.mint : .orange, radius: 4)
+                Text(session.isServerConnected ? "CLOUD" : session.isConnected ? "PHONE" : "LOCAL").font(.system(size: 6, weight: .medium, design: .monospaced)).foregroundStyle(WatchTheme.muted)
             }
         }
     }

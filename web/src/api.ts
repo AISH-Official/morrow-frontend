@@ -1,7 +1,12 @@
 import type{AssistantResult,CheckInInput,ConnectionMode,Dashboard,PersonalizationProfile,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
 
-const API_ROOT='/api/v1';
+const API_ROOT=import.meta.env.VITE_API_BASE_URL||'/api/v1';
 const REQUEST_TIMEOUT=5000;
+const SESSION_KEY='morrow.web.session.v1';
+const INSTALLATION_KEY='morrow.web.installation.v1';
+let pendingSession:Promise<WebSession>|null=null;
+
+export type WebSession={userId:string;accessToken:string;pairingCode:string;deviceId:string;platform:string};
 
 export const demo:Dashboard={
  wellnessLoad:'HIGHER_THAN_USUAL',
@@ -25,20 +30,50 @@ export const demoReport:WeeklyReport={
  insights:'이번 주는 수면이 짧은 날에 피로가 반복됐지만, 짧은 움직임으로 회복한 흐름이 확인됐어요.'
 };
 
-async function request<T>(path:string,init?:RequestInit):Promise<T>{
+async function rawRequest<T>(path:string,init?:RequestInit,authenticated=true,retryAuthentication=true):Promise<T>{
  const controller=new AbortController();
  const timer=window.setTimeout(()=>controller.abort(),REQUEST_TIMEOUT);
  try{
+  const session=authenticated?await getWebSession():null;
   const response=await fetch(`${API_ROOT}${path}`,{
    ...init,
    signal:controller.signal,
-   headers:{'Content-Type':'application/json',...init?.headers}
+   headers:{'Content-Type':'application/json',...(session?{Authorization:`Bearer ${session.accessToken}`}:{}) ,...init?.headers}
   });
+  if(response.status===401&&authenticated&&retryAuthentication){window.localStorage.removeItem(SESSION_KEY);pendingSession=null;return rawRequest<T>(path,init,true,false)}
   if(!response.ok)throw new Error(`API ${response.status}`);
   if(response.status===204)return undefined as T;
   return await response.json() as T;
  }finally{window.clearTimeout(timer)}
 }
+
+function storedSession():WebSession|null{
+ try{const value=window.localStorage.getItem(SESSION_KEY);return value?JSON.parse(value) as WebSession:null}catch{return null}
+}
+
+function installationId():string{
+ const existing=window.localStorage.getItem(INSTALLATION_KEY);if(existing)return existing;
+ const value=crypto.randomUUID();window.localStorage.setItem(INSTALLATION_KEY,value);return value;
+}
+
+function saveSession(value:WebSession):WebSession{window.localStorage.setItem(SESSION_KEY,JSON.stringify(value));return value}
+
+export async function getWebSession():Promise<WebSession>{
+ const stored=storedSession();if(stored)return stored;
+ if(pendingSession)return pendingSession;
+ const deviceId=`web-${installationId()}`;
+ pendingSession=rawRequest<WebSession>('/auth/device',{method:'POST',body:JSON.stringify({deviceId,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})},false).then(saveSession);
+ try{return await pendingSession}finally{pendingSession=null}
+}
+
+export async function pairWebSession(pairingCode:string):Promise<WebSession>{
+ const value=await rawRequest<WebSession>('/auth/pair',{method:'POST',body:JSON.stringify({pairingCode,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})},false);
+ return saveSession(value);
+}
+
+async function request<T>(path:string,init?:RequestInit):Promise<T>{return rawRequest<T>(path,init,true)}
+
+async function userPath(path:string):Promise<string>{const session=await getWebSession();return `${path}${path.includes('?')?'&':'?'}userId=${encodeURIComponent(session.userId)}`}
 
 function normalizeKind(value:string):TimelineKind{
  const kind=value.toLowerCase();
@@ -50,32 +85,32 @@ function normalizeDashboard(value:Dashboard):Dashboard{
 }
 
 export async function getDashboard():Promise<{data:Dashboard;mode:ConnectionMode}>{
- try{return{data:normalizeDashboard(await request<Dashboard>('/dashboard?userId=default-user')),mode:'live'}}
+ try{return{data:normalizeDashboard(await request<Dashboard>(await userPath('/dashboard'))),mode:'live'}}
  catch{return{data:demo,mode:'demo'}}
 }
 
 export async function getWeeklyReport():Promise<WeeklyReport>{
- try{return await request<WeeklyReport>('/reports/weekly?userId=default-user')}
+ try{return await request<WeeklyReport>(await userPath('/reports/weekly'))}
  catch{return demoReport}
 }
 
 export async function sendAssistantMessage(content:string):Promise<AssistantResult>{
  try{
-  return await request<AssistantResult>('/assistant/messages',{method:'POST',body:JSON.stringify({userId:'default-user',content})});
+  const session=await getWebSession();return await request<AssistantResult>('/assistant/messages',{method:'POST',body:JSON.stringify({userId:session.userId,content})});
  }catch{return{content:localAssistantResponse(content),aiMode:'LOCAL',personalizationEvidenceCount:0,personalized:false}}
 }
 
 export async function getPersonalization():Promise<{profile:PersonalizationProfile;memories:UserMemory[]}>{
- try{return{profile:await request<PersonalizationProfile>('/personalization/profile?userId=default-user'),memories:await request<UserMemory[]>('/personalization/memories?userId=default-user')}}
+ try{return{profile:await request<PersonalizationProfile>(await userPath('/personalization/profile')),memories:await request<UserMemory[]>(await userPath('/personalization/memories'))}}
  catch{return{profile:{userId:'default-user',activeMemoryCount:0,evidenceCount:0,helpfulStrategyCount:0,avoidStrategyCount:0,lastLearnedAt:null,personalized:false},memories:[]}}
 }
 
-export async function rebuildPersonalization():Promise<PersonalizationProfile>{return request<PersonalizationProfile>('/personalization/rebuild?userId=default-user',{method:'POST'})}
+export async function rebuildPersonalization():Promise<PersonalizationProfile>{return request<PersonalizationProfile>(await userPath('/personalization/rebuild'),{method:'POST'})}
 
-export async function addPersonalMemory(type:'PREFERENCE'|'GOAL',summary:string):Promise<UserMemory>{return request<UserMemory>('/personalization/memories',{method:'POST',body:JSON.stringify({userId:'default-user',type,summary})})}
+export async function addPersonalMemory(type:'PREFERENCE'|'GOAL',summary:string):Promise<UserMemory>{const session=await getWebSession();return request<UserMemory>('/personalization/memories',{method:'POST',body:JSON.stringify({userId:session.userId,type,summary})})}
 
 export async function createCheckIn(input:CheckInInput):Promise<{id:string}>{
- try{return await request<{id:string}>('/check-ins',{method:'POST',body:JSON.stringify(input)})}
+ try{const session=await getWebSession();return await request<{id:string}>('/check-ins',{method:'POST',body:JSON.stringify({...input,userId:session.userId})})}
  catch(error){console.warn('Check-in API unavailable; continuing locally.',error);return{id:`local-${Date.now()}`}}
 }
 
@@ -85,7 +120,7 @@ export async function submitRecommendationFeedback(id:string,helpful:boolean):Pr
 }
 
 export async function clearWellnessData():Promise<void>{
- await request('/users/me/data?userId=default-user',{method:'DELETE'});
+ await request(await userPath('/users/me/data'),{method:'DELETE'});
 }
 
 export function appendLocalCheckIn(current:Dashboard,input:CheckInInput,id:string):Dashboard{

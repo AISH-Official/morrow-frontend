@@ -20,6 +20,13 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Morrow Watch는 심박, HRV, 걸음, 활동 에너지와 운동 시간을 읽어 손목에서 웰니스 요약을 보여줍니다.</string>
 	<key>NSHealthUpdateUsageDescription</key>

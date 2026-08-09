@@ -9,6 +9,9 @@ struct SettingsView: View {
     @AppStorage("morrow.notifications.enabled") private var notificationsEnabled = true
     @State private var showDeleteConfirmation = false
     @State private var deletionCompleted = false
+    @State private var apiURL = MorrowRuntimeConfiguration.apiRootString
+    @State private var pairingCode = "연결 중"
+    @State private var connectionMessage = ""
 
     var body: some View {
         Form {
@@ -17,6 +20,13 @@ struct SettingsView: View {
                 LabeledContent("연결 상태", value: syncService.statusText)
                 Text("HealthKit 원본 샘플은 전송하지 않고, 화면에 보이는 일별 요약값과 체크인만 같은 사용자 계정으로 동기화합니다.")
                     .font(.footnote).foregroundStyle(.secondary)
+                TextField("서버 API 주소", text: $apiURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                Button("서버 주소 저장 및 다시 연결") { reconnectServer() }
+                LabeledContent("웹 연결 코드", value: pairingCode)
+                if !connectionMessage.isEmpty { Text(connectionMessage).font(.footnote).foregroundStyle(.secondary) }
             }
             Section("iPhone · Watch 알림") {
                 Toggle("스마트 알림", isOn: $notificationsEnabled)
@@ -54,6 +64,7 @@ struct SettingsView: View {
             Text("삭제된 기록은 복구할 수 없습니다. HealthKit 원본 데이터는 삭제하지 않습니다.")
         }
         .alert("삭제했습니다", isPresented: $deletionCompleted) { Button("확인", role: .cancel) {} }
+        .task { await loadConnection() }
     }
 
     private func deleteAll() {
@@ -63,6 +74,27 @@ struct SettingsView: View {
         }
         try? modelContext.save()
         deletionCompleted = true
+    }
+
+    private func reconnectServer() {
+        MorrowRuntimeConfiguration.setAPIOverride(apiURL)
+        Task {
+            await MorrowAPIClient.shared.resetForServerChange()
+            await loadConnection()
+        }
+    }
+
+    @MainActor
+    private func loadConnection() async {
+        apiURL = MorrowRuntimeConfiguration.apiRootString
+        do {
+            let credentials = try await MorrowAPIClient.shared.credentials()
+            pairingCode = credentials.pairingCode
+            connectionMessage = "사용자 \(credentials.userId)로 iPhone·Watch·웹을 연결합니다."
+        } catch {
+            pairingCode = "연결 실패"
+            connectionMessage = "Mac의 LAN 주소를 포함한 API 주소를 입력하세요. 예: http://192.168.0.10:8080/api/v1"
+        }
     }
 }
 

@@ -28,6 +28,9 @@
 		C80ECCD53C84446BF3B17F7B /* WatchCheckInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012E2B5F4A00F40976E1BC0B /* WatchCheckInView.swift */; };
 		F06E6259A286049FA5833268 /* MorrowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 712B73C5702A5023D34349F7 /* MorrowApp.swift */; };
 		F58AAB5D586550302DD0583D /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1600BA87FD520C24056EDAC0 /* DashboardView.swift */; };
+		A10000000000000000000001 /* MorrowAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* MorrowAPIClient.swift */; };
+		A10000000000000000000002 /* RemoteNotificationDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* RemoteNotificationDelegate.swift */; };
+		A10000000000000000000003 /* WatchRemoteNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* WatchRemoteNotifications.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -77,6 +80,9 @@
 		E8DED4169B24D2633D203F1C /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
 		EF7E1FCA991BDCC07A230829 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F2DDE170E37504CDF06B41F1 /* CheckInHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckInHistoryView.swift; sourceTree = "<group>"; };
+		B10000000000000000000001 /* MorrowAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorrowAPIClient.swift; sourceTree = "<group>"; };
+		B10000000000000000000002 /* RemoteNotificationDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteNotificationDelegate.swift; sourceTree = "<group>"; };
+		B10000000000000000000003 /* WatchRemoteNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRemoteNotifications.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -94,6 +100,8 @@
 			children = (
 				3ED3364F0048FA11122B66F0 /* BaselineAnalyzer.swift */,
 				E8DED4169B24D2633D203F1C /* HealthStore.swift */,
+				B10000000000000000000001 /* MorrowAPIClient.swift */,
+				B10000000000000000000002 /* RemoteNotificationDelegate.swift */,
 				CC983B0A1343B391B2F39926 /* WatchSessionReceiver.swift */,
 			);
 			path = Services;
@@ -188,6 +196,7 @@
 			children = (
 				393BAD6A329329DFDB4B0DB3 /* MorrowWatchApp.swift */,
 				012E2B5F4A00F40976E1BC0B /* WatchCheckInView.swift */,
+				B10000000000000000000003 /* WatchRemoteNotifications.swift */,
 				6D255645F9DC174E59A557A3 /* WatchSessionManager.swift */,
 			);
 			path = Sources;
@@ -337,6 +346,7 @@
 			files = (
 				351D9EE971AC5E06F25C7505 /* MorrowWatchApp.swift in Sources */,
 				C80ECCD53C84446BF3B17F7B /* WatchCheckInView.swift in Sources */,
+				A10000000000000000000003 /* WatchRemoteNotifications.swift in Sources */,
 				65E7C0547D77ABABA83522FB /* WatchSessionManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -352,8 +362,10 @@
 				496B6BD2FD1BCE73862BC7AA /* HealthStore.swift in Sources */,
 				7E3F0C6D19D4D441A74700D7 /* LoadGaugeCard.swift in Sources */,
 				8F7211945F43F0FD448DA202 /* MetricCard.swift in Sources */,
+				A10000000000000000000001 /* MorrowAPIClient.swift in Sources */,
 				F06E6259A286049FA5833268 /* MorrowApp.swift in Sources */,
 				AC3F5CE4BF88C6FA9683C12E /* RecommendationCard.swift in Sources */,
+				A10000000000000000000002 /* RemoteNotificationDelegate.swift in Sources */,
 				414063D00A9390521B2320C0 /* SettingsView.swift in Sources */,
 				1BE187E0EB2E018B8CFA7EB5 /* Theme.swift in Sources */,
 				52008737558B0BBDA35195EF /* WatchSessionReceiver.swift in Sources */,
