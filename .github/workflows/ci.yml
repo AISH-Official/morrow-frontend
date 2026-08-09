@@ -1,0 +1,41 @@
+name: Frontend CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Web build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  apple:
+    name: iPhone and Watch build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build iOS and watchOS targets
+        run: >-
+          xcodebuild
+          -project apple/Morrow.xcodeproj
+          -scheme Morrow
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          build
+
