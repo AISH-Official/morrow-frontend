@@ -1,5 +1,5 @@
 import{FormEvent,useEffect,useMemo,useRef,useState}from'react';
-import{Activity,Archive,BarChart3,BrainCircuit,Check,ChevronRight,Command,Footprints,HeartPulse,History,LockKeyhole,LogOut,Mic,MicOff,MoonStar,Plus,RefreshCw,Send,Settings2,ShieldCheck,Signal,Sparkles,ThumbsDown,ThumbsUp,Trash2,Volume2,VolumeX,Watch,X}from'lucide-react';
+import{Activity,Archive,BarChart3,BrainCircuit,Check,ChevronDown,ChevronRight,Command,Footprints,HeartPulse,History,LockKeyhole,LogOut,Mic,MicOff,MoonStar,Plus,RefreshCw,Send,Settings2,ShieldCheck,Signal,Sparkles,ThumbsDown,ThumbsUp,Trash2,Volume2,VolumeX,Watch,X}from'lucide-react';
 import{ApiRequestError,addPersonalMemory,clearWellnessData,createCheckIn,getDashboard,getPersonalization,getStoredWebSession,getWeeklyReport,isSessionExpired,loginWebSession,logoutWebSession,pairWebSession,rebuildPersonalization,sendAssistantMessage,submitRecommendationFeedback}from'./api';
 import type{WebSession}from'./api';
 import type{CheckInCause,CheckInInput,CheckInStatus,ConnectionMode,Dashboard,PersonalizationProfile,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
@@ -174,13 +174,16 @@ type TodayProps={dashboard:Dashboard;phase:Phase;phaseText:string;particles:{lef
 function TodayView({dashboard,phase,phaseText,particles,chats,message,sound,feedbackDone,refreshing,onMessage,onSend,onMic,onSound,onSuggestion,onCheckIn,onFeedback,onRefresh}:TodayProps){
  const sleepHours=Math.floor(dashboard.metrics.sleepMinutes/60);const sleepMinutes=dashboard.metrics.sleepMinutes%60;
  const conversationRef=useRef<HTMLDivElement>(null);
- useEffect(()=>{const node=conversationRef.current;if(node)node.scrollTo({top:node.scrollHeight,behavior:phase==='speaking'?'auto':'smooth'})},[chats,phase]);
+ const[followLatest,setFollowLatest]=useState(true);
+ function scrollToLatest(behavior:ScrollBehavior='smooth'){const node=conversationRef.current;if(!node)return;node.scrollTo({top:node.scrollHeight,behavior});setFollowLatest(true)}
+ function updateFollowState(){const node=conversationRef.current;if(node)setFollowLatest(node.scrollHeight-node.scrollTop-node.clientHeight<40)}
+ useEffect(()=>{if(followLatest)scrollToLatest(phase==='speaking'?'auto':'smooth')},[chats,phase,followLatest]);
  return <div className="today-grid">
-  <section className="assistant-panel">
+  <section className={`assistant-panel ${chats.length>2?'has-conversation':''}`}>
    <div className="panel-kicker"><BrainCircuit/> ADAPTIVE COMPANION <button className={refreshing?'rotating':''} onClick={onRefresh} aria-label="데이터 새로고침"><RefreshCw/></button></div>
    <div className="phase-label"><i/>{phaseText}</div>
    <div className="ai-core" aria-label={phaseText}><div className="outer-orbit"><i/><i/><i/></div><div className="tech-ring ring-one"/><div className="tech-ring ring-two"/><div className="scan-line"/><div className="core-halo"/><div className="core-surface"><div className="wave">{Array.from({length:25},(_,index)=><i key={index} style={{height:`${12+Math.abs(12-index)*1.2+(index%4)*4}px`,animationDelay:`-${index*.06}s`}}/>)}</div><div className="thinking-dots"><i/><i/><i/></div></div>{particles.map((particle,index)=><i className="particle" key={index} style={{left:particle.left,top:particle.top,width:particle.size,height:particle.size,animationDelay:particle.delay}}/>)}</div>
-   <div className="conversation" ref={conversationRef} aria-live="polite">{chats.map(item=><p key={item.id} className={item.role}>{item.text}{item.role==='ai'&&phase==='speaking'&&item.id===chats.at(-1)?.id?<i className="cursor"/>:null}</p>)}</div>
+   <div className="conversation-wrap"><div className="conversation" ref={conversationRef} onScroll={updateFollowState} aria-live="polite">{chats.map(item=><p key={item.id} className={item.role}>{item.text}{item.role==='ai'&&phase==='speaking'&&item.id===chats.at(-1)?.id?<i className="cursor"/>:null}</p>)}</div>{!followLatest&&<button className="jump-latest" type="button" onClick={()=>scrollToLatest()}><ChevronDown/> 최신 대화</button>}</div>
    <div className="suggestions">{phase==='idle'&&suggestions.map(value=><button key={value} onClick={()=>onSuggestion(value)}>{value}<ChevronRight/></button>)}</div>
    <form className="composer" onSubmit={(event:FormEvent)=>{event.preventDefault();onSend()}}><button aria-label={phase==='listening'?'음성 듣기 중지':'음성으로 말하기'} type="button" className={`mic ${phase==='listening'?'active':''}`} onClick={onMic}>{phase==='listening'?<MicOff/>:<Mic/>}</button><div><input value={message} onChange={event=>onMessage(event.target.value)} placeholder={phase==='listening'?'듣고 있어요...':'Morrow에게 이야기하세요'} disabled={phase==='thinking'||phase==='speaking'}/><span>{phase==='thinking'?'최근 흐름과 대화를 연결하는 중':'Enter로 보내기 · 대화는 웰니스 범위에서 답합니다'}</span></div><button aria-label={sound?'음성 답변 끄기':'음성 답변 켜기'} className="sound" type="button" onClick={onSound}>{sound?<Volume2/>:<VolumeX/>}</button><button aria-label="메시지 보내기" className="send" type="submit"><Send/></button></form>
   </section>
