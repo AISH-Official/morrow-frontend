@@ -41,7 +41,7 @@ export type CheckInInput={
  recordedAt:string;
 };
 
-export type ConnectionMode='live'|'demo';
+export type ConnectionMode='live'|'offline';
 
 export type PersonalizationProfile={
  userId:string;

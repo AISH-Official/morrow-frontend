@@ -25,7 +25,7 @@ npm run dev
 - 기본 API 프록시: http://localhost:8080
 - 공개 데모: https://aish-official.github.io/morrow-frontend/
 
-배포 시 저장소 Actions 변수 `VITE_API_BASE_URL`에 공개 HTTPS API 기준 URL을 설정합니다. 비어 있으면 안전한 데모 데이터로 동작합니다.
+배포 시 저장소 Actions 변수 `VITE_API_BASE_URL`에 공개 HTTPS API 기준 URL을 설정합니다. 비어 있으면 같은 출처의 `/api/v1`을 사용하며, 연결 실패 시 임의의 데모 데이터로 바꾸지 않고 마지막 동기화 데이터와 오류 상태를 표시합니다.
 
 ## iPhone·Watch 실행
 

@@ -1,6 +1,6 @@
 import{FormEvent,useEffect,useMemo,useRef,useState}from'react';
 import{Activity,Archive,BarChart3,BrainCircuit,Check,ChevronRight,Command,Footprints,HeartPulse,History,LockKeyhole,LogOut,Mic,MicOff,MoonStar,Plus,RefreshCw,Send,Settings2,ShieldCheck,Signal,Sparkles,ThumbsDown,ThumbsUp,Trash2,Volume2,VolumeX,Watch,X}from'lucide-react';
-import{addPersonalMemory,appendLocalCheckIn,clearWellnessData,createCheckIn,getDashboard,getPersonalization,getStoredWebSession,getWeeklyReport,getWebSession,loginWebSession,logoutWebSession,pairWebSession,rebuildPersonalization,sendAssistantMessage,submitRecommendationFeedback}from'./api';
+import{ApiRequestError,addPersonalMemory,clearWellnessData,createCheckIn,getDashboard,getPersonalization,getStoredWebSession,getWeeklyReport,isSessionExpired,loginWebSession,logoutWebSession,pairWebSession,rebuildPersonalization,sendAssistantMessage,submitRecommendationFeedback}from'./api';
 import type{WebSession}from'./api';
 import type{CheckInCause,CheckInInput,CheckInStatus,ConnectionMode,Dashboard,PersonalizationProfile,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
 
@@ -16,39 +16,73 @@ const statusOptions:[CheckInStatus,string,string][]=[['OK','괜찮아요','안�
 const causeOptions:[CheckInCause,string][]=[['SLEEP','수면'],['WORK','업무'],['STUDY','학업'],['RELATIONSHIP','관계'],['PHYSICAL','신체'],['UNKNOWN','잘 모르겠어요']];
 const statusLabel:Record<string,string>={OK:'괜찮음',TENSE:'긴장',TIRED:'피로',LOW_FOCUS:'집중 저하',UNCOMFORTABLE:'불편함'};
 const causeLabel:Record<string,string>={SLEEP:'수면',WORK:'업무',STUDY:'학업',RELATIONSHIP:'관계',PHYSICAL:'신체',UNKNOWN:'복합 요인'};
+const welcomeChats:Chat[]=[
+ {id:1,role:'ai',text:'안녕하세요, 사용자님.'},
+ {id:2,role:'ai',text:'오늘의 건강 흐름과 지금 느끼는 상태를 함께 살펴볼게요.'}
+];
+const CACHE_PREFIX='morrow.web.state.v1:';
+type CachedWebState={dashboard?:Dashboard;report?:WeeklyReport;personalization?:PersonalizationProfile;memories?:UserMemory[];chats?:Chat[];view?:ViewKey;aiMode?:'LIVE'|'FALLBACK'|'LOCAL'|'UNKNOWN';updatedAt?:string};
+
+function readCachedState(userId:string):CachedWebState|null{
+ try{const value=window.localStorage.getItem(`${CACHE_PREFIX}${userId}`);return value?JSON.parse(value) as CachedWebState:null}catch{return null}
+}
+function updateCachedState(userId:string,patch:Partial<CachedWebState>){
+ const current=readCachedState(userId)??{};
+ window.localStorage.setItem(`${CACHE_PREFIX}${userId}`,JSON.stringify({...current,...patch,updatedAt:new Date().toISOString()}));
+}
+function clearCachedState(userId:string){window.localStorage.removeItem(`${CACHE_PREFIX}${userId}`)}
+
+const bootSession=getStoredWebSession();
+const bootCache=bootSession?readCachedState(bootSession.userId):null;
 
 export default function App(){
- const[dashboard,setDashboard]=useState<Dashboard|null>(null);
- const[report,setReport]=useState<WeeklyReport|null>(null);
- const[mode,setMode]=useState<ConnectionMode>('demo');
- const[view,setView]=useState<ViewKey>('today');
+ const[dashboard,setDashboard]=useState<Dashboard|null>(bootCache?.dashboard??null);
+ const[report,setReport]=useState<WeeklyReport|null>(bootCache?.report??null);
+ const[mode,setMode]=useState<ConnectionMode>(bootCache?'offline':'live');
+ const[view,setView]=useState<ViewKey>(bootCache?.view??'today');
  const[message,setMessage]=useState('');
  const[phase,setPhase]=useState<Phase>('idle');
  const[sound,setSound]=useState(false);
- const[chats,setChats]=useState<Chat[]>([
-  {id:1,role:'ai',text:'좋은 저녁이에요, 수빈님.'},
-  {id:2,role:'ai',text:'오늘은 평소보다 조금 지쳐 보여요. 지금 어떤 상태인지 이야기해 주세요.'}
- ]);
+ const[chats,setChats]=useState<Chat[]>(bootCache?.chats?.length?bootCache.chats:welcomeChats);
  const[checkInOpen,setCheckInOpen]=useState(false);
  const[toast,setToast]=useState('');
  const[feedbackDone,setFeedbackDone]=useState(false);
  const[refreshing,setRefreshing]=useState(false);
- const[personalization,setPersonalization]=useState<PersonalizationProfile|null>(null);
- const[memories,setMemories]=useState<UserMemory[]>([]);
- const[aiMode,setAiMode]=useState<'LIVE'|'FALLBACK'|'LOCAL'|'UNKNOWN'>('UNKNOWN');
- const[account,setAccount]=useState<WebSession|null>(null);
- const[loginRequired,setLoginRequired]=useState(()=>getStoredWebSession()===null);
+ const[personalization,setPersonalization]=useState<PersonalizationProfile|null>(bootCache?.personalization??null);
+ const[memories,setMemories]=useState<UserMemory[]>(bootCache?.memories??[]);
+ const[aiMode,setAiMode]=useState<'LIVE'|'FALLBACK'|'LOCAL'|'UNKNOWN'>(bootCache?.aiMode??'UNKNOWN');
+ const[account,setAccount]=useState<WebSession|null>(bootSession);
+ const[loginRequired,setLoginRequired]=useState(bootSession===null);
+ const[loginMessage,setLoginMessage]=useState(bootSession?'':'데이터를 안전하게 불러오려면 로그인해 주세요.');
+ const[loadError,setLoadError]=useState('');
  const recognition=useRef<RecognitionLike|null>(null);
- const nextId=useRef(3);
+ const nextId=useRef(Math.max(2,...(bootCache?.chats??[]).map(chat=>chat.id))+1);
  const particles=useMemo(()=>Array.from({length:34},(_,index)=>({left:`${(index*47)%100}%`,top:`${(index*71)%100}%`,delay:`-${(index%13)*.37}s`,size:1+(index%3)})),[]);
 
- useEffect(()=>{const stored=getStoredWebSession();if(stored){setAccount(stored);void loadData()}return()=>{recognition.current?.stop();window.speechSynthesis?.cancel()}},[]);
+ useEffect(()=>{if(bootSession)void loadData();return()=>{recognition.current?.stop();window.speechSynthesis?.cancel()}},[]);
  useEffect(()=>{if(!toast)return;const timer=window.setTimeout(()=>setToast(''),2800);return()=>window.clearTimeout(timer)},[toast]);
+ useEffect(()=>{if(account)updateCachedState(account.userId,{dashboard:dashboard??undefined,report:report??undefined,personalization:personalization??undefined,memories,chats,view,aiMode})},[account,dashboard,report,personalization,memories,chats,view,aiMode]);
 
  async function loadData(showSpinner=false){
   if(showSpinner)setRefreshing(true);
-  const[dashResult,weekly,personal]=await Promise.all([getDashboard(),getWeeklyReport(),getPersonalization()]);
-  setDashboard(dashResult.data);setMode(dashResult.mode);setReport(weekly);setPersonalization(personal.profile);setMemories(personal.memories);setRefreshing(false);
+  try{
+   const[dashResult,weekly,personal]=await Promise.all([getDashboard(),getWeeklyReport(),getPersonalization()]);
+   setDashboard(dashResult);setMode('live');setReport(weekly);setPersonalization(personal.profile);setMemories(personal.memories);setLoadError('');
+   const session=getStoredWebSession();if(session)updateCachedState(session.userId,{dashboard:dashResult,report:weekly,personalization:personal.profile,memories:personal.memories});
+  }catch(error){
+   if(isSessionExpired(error)){expireSession();return}
+   setMode('offline');setLoadError('서버에서 최신 데이터를 불러오지 못했습니다.');
+   if(dashboard)setToast('연결이 불안정해 마지막으로 저장된 데이터를 보여드려요.');
+  }finally{setRefreshing(false)}
+ }
+
+ function expireSession(){
+  setAccount(null);setLoginRequired(true);setLoginMessage('로그인이 만료되었습니다. 다시 로그인해 주세요.');setLoadError('');
+ }
+
+ function hydrateAccount(value:WebSession){
+  const cached=readCachedState(value.userId);
+  setDashboard(cached?.dashboard??null);setReport(cached?.report??null);setPersonalization(cached?.personalization??null);setMemories(cached?.memories??[]);setChats(cached?.chats?.length?cached.chats:welcomeChats);setView(cached?.view??'today');setAiMode(cached?.aiMode??'UNKNOWN');setMode(cached?'offline':'live');setLoadError('');
  }
 
  function speak(text:string){
@@ -64,7 +98,8 @@ export default function App(){
  async function send(text=message){
   const clean=text.trim();if(!clean||phase==='thinking'||phase==='speaking')return;
   recognition.current?.stop();window.speechSynthesis?.cancel();setChats(value=>[...value,{id:nextId.current++,role:'user',text:clean}]);setMessage('');setPhase('thinking');
-  const result=await sendAssistantMessage(clean);setAiMode(result.aiMode);if(result.personalized)setPersonalization(value=>value?{...value,evidenceCount:Math.max(value.evidenceCount,result.personalizationEvidenceCount),personalized:true}:value);streamAnswer(result.content);
+  try{const result=await sendAssistantMessage(clean);setAiMode(result.aiMode);if(result.personalized)setPersonalization(value=>value?{...value,evidenceCount:Math.max(value.evidenceCount,result.personalizationEvidenceCount),personalized:true}:value);streamAnswer(result.content)}
+  catch(error){setPhase('idle');if(isSessionExpired(error))expireSession();else setToast('AI 연결을 확인한 뒤 다시 시도해 주세요.')}
  }
 
  function toggleMic(){
@@ -83,15 +118,13 @@ export default function App(){
  }
 
  async function saveCheckIn(input:CheckInInput){
-  const result=await createCheckIn(input);
-  if(dashboard&&result.id.startsWith('local-'))setDashboard(appendLocalCheckIn(dashboard,input,result.id));
-  else await loadData();
-  setCheckInOpen(false);setFeedbackDone(false);setToast(mode==='live'?'체크인이 모든 기기 흐름에 반영됐어요.':'체크인을 데모 타임라인에 반영했어요.');
+  try{await createCheckIn(input);await loadData();setCheckInOpen(false);setFeedbackDone(false);setToast('체크인이 저장되어 모든 기기 흐름에 반영됐어요.')}
+  catch(error){if(isSessionExpired(error))expireSession();else{setMode('offline');setToast('체크인을 저장하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.')}}
  }
 
  async function feedback(helpful:boolean){
   if(!dashboard?.recommendation)return;
-  try{await submitRecommendationFeedback(dashboard.recommendation.id,helpful);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories)}catch{setMode('demo')}
+  try{await submitRecommendationFeedback(dashboard.recommendation.id,helpful);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories)}catch(error){if(isSessionExpired(error))expireSession();else{setMode('offline');setToast('피드백을 저장하지 못했습니다.');}return}
   setFeedbackDone(true);setToast(helpful?'좋아요. 이 회복 방법을 더 잘 기억할게요.':'알겠어요. 다음에는 다른 방법을 제안할게요.');
   const now=new Date();
   const recovery:TimelineItem={id:`feedback-${Date.now()}`,time:now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}),title:'회복 활동 피드백',detail:helpful?'짧은 걷기가 도움이 됐어요.':'이번 추천은 도움이 되지 않았어요.',kind:'recovery',userConfirmed:true};
@@ -99,37 +132,39 @@ export default function App(){
  }
 
  async function deleteData(){
-  try{await clearWellnessData();await loadData();setToast('서버의 웰니스 기록과 개인화 메모리를 삭제했어요.')}catch{setDashboard(value=>value?{...value,timeline:[]}:value);setToast('이 데모 세션의 기록을 비웠어요.')}
+  try{await clearWellnessData();await loadData();setToast('서버의 웰니스 기록과 개인화 메모리를 삭제했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('데이터를 삭제하지 못했습니다. 연결을 확인해 주세요.')}
  }
 
- async function rebuildLearning(){try{await rebuildPersonalization();const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('전체 기록에서 개인화 메모리를 다시 학습했어요.')}catch{setToast('백엔드에 연결한 뒤 다시 시도해 주세요.')}}
- async function addMemory(type:'PREFERENCE'|'GOAL',summary:string){try{await addPersonalMemory(type,summary);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('직접 알려준 내용을 개인화 메모리에 저장했어요.')}catch{setToast('메모리를 저장하지 못했어요.')}}
- async function pairAccount(code:string){try{const value=await pairWebSession(code);setAccount(value);await loadData();setToast('iPhone·Watch와 같은 사용자 계정으로 연결됐어요.')}catch{setToast('연결 코드를 확인하고 다시 시도해 주세요.')}}
- async function login(username:string,password:string){const value=await loginWebSession(username,password);setAccount(value);setLoginRequired(false);await loadData()}
+ async function rebuildLearning(){try{await rebuildPersonalization();const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('전체 기록에서 개인화 메모리를 다시 학습했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('백엔드에 연결한 뒤 다시 시도해 주세요.')}}
+ async function addMemory(type:'PREFERENCE'|'GOAL',summary:string){try{await addPersonalMemory(type,summary);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('직접 알려준 내용을 개인화 메모리에 저장했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('메모리를 저장하지 못했어요.')}}
+ async function pairAccount(code:string){try{const value=await pairWebSession(code);setAccount(value);hydrateAccount(value);await loadData();setToast('iPhone·Watch와 같은 사용자 계정으로 연결됐어요.')}catch{setToast('연결 코드를 확인하고 다시 시도해 주세요.')}}
+ async function login(username:string,password:string){const value=await loginWebSession(username,password);setAccount(value);hydrateAccount(value);setLoginMessage('');setLoginRequired(false);await loadData()}
  async function logout(){
   if(!window.confirm('이 브라우저에서 로그아웃할까요? 서버의 건강 기록은 삭제되지 않습니다.'))return;
   window.speechSynthesis?.cancel();recognition.current?.stop();
   const revocation=logoutWebSession();
+  if(account)clearCachedState(account.userId);
   setAccount(null);setDashboard(null);setReport(null);setPersonalization(null);setMemories([]);setChats([]);setPhase('idle');setLoginRequired(true);
+  setLoginMessage('로그아웃되었습니다.');
   await revocation;
  }
 
  const phaseText={idle:'무엇이든 이야기해 주세요',listening:'듣고 있어요',thinking:'당신의 흐름을 살펴보고 있어요',speaking:'답변하고 있어요'}[phase];
  const navItems:[ViewKey,string,typeof Command][]=[['today','오늘',Command],['timeline','타임라인',History],['report','주간 리포트',BarChart3],['privacy','데이터',Archive]];
 
- if(loginRequired)return <WebLoginView onLogin={login}/>;
+ if(loginRequired)return <WebLoginView onLogin={login} message={loginMessage}/>;
  return <div className={`app-shell phase-${phase}`}>
   <div className="atmosphere"/><div className="grid-floor"/>
   <aside className="rail" aria-label="주요 메뉴"><button className="mark" onClick={()=>setView('today')} aria-label="Morrow 홈">M</button><nav>{navItems.map(([key,label,Icon])=><button key={key} className={view===key?'on':''} onClick={()=>setView(key)} aria-label={label} title={label}><Icon/></button>)}</nav><a className="device-link" href={`${import.meta.env.BASE_URL}device-preview/`} aria-label="기기 경험 보기" title="기기 경험"><Watch/></a><button className="settings" onClick={()=>setView('privacy')} aria-label="설정"><Settings2/></button></aside>
-  <header className="topbar"><div className="identity"><i className="status-dot"/><div><b>MORROW</b><span>PERSONAL WELLNESS INTELLIGENCE</span></div></div><div className="system-status"><span className={`mode ${mode}`}><Signal/> {mode==='live'?'LIVE API':'DEMO SAFE MODE'}</span><span><BrainCircuit/> {aiMode==='LIVE'?'AI LIVE':personalization?.personalized?`MEMORY ${personalization.evidenceCount}`:'AI READY'}</span><span><ShieldCheck/> PRIVATE BY DESIGN</span><button onClick={newSession}><Plus/> NEW SESSION</button></div></header>
+  <header className="topbar"><div className="identity"><i className="status-dot"/><div><b>MORROW</b><span>PERSONAL WELLNESS INTELLIGENCE</span></div></div><div className="system-status"><span className={`mode ${mode}`}><Signal/> {mode==='live'?'LIVE API':'OFFLINE · LAST SYNC'}</span><span><BrainCircuit/> {aiMode==='LIVE'?'AI LIVE':personalization?.personalized?`MEMORY ${personalization.evidenceCount}`:'AI READY'}</span><span><ShieldCheck/> PRIVATE BY DESIGN</span><button onClick={newSession}><Plus/> NEW SESSION</button></div></header>
   <main className="main-area">
    {dashboard&&view==='today'&&<TodayView dashboard={dashboard} phase={phase} phaseText={phaseText} particles={particles} chats={chats} message={message} sound={sound} feedbackDone={feedbackDone} refreshing={refreshing} onMessage={setMessage} onSend={send} onMic={toggleMic} onSound={()=>{setSound(value=>!value);window.speechSynthesis?.cancel()}} onSuggestion={send} onCheckIn={()=>setCheckInOpen(true)} onFeedback={feedback} onRefresh={()=>void loadData(true)}/>}
    {dashboard&&view==='timeline'&&<TimelineView items={dashboard.timeline} onCheckIn={()=>setCheckInOpen(true)}/>}
    {report&&view==='report'&&<ReportView report={report}/>}
    {view==='privacy'&&<PrivacyView mode={mode} account={account} profile={personalization} memories={memories} onPair={pairAccount} onRebuild={()=>void rebuildLearning()} onAdd={addMemory} onDelete={()=>void deleteData()} onLogout={()=>void logout()}/>}
-   {!dashboard&&view!=='privacy'&&<LoadingView/>}
+   {!dashboard&&view!=='privacy'&&<LoadingView error={loadError} onRetry={()=>void loadData(true)}/>}
   </main>
-  <footer><span>WELLNESS SUPPORT — NOT MEDICAL DIAGNOSIS</span><span className="session"><i/> {mode==='live'?'API CONNECTED':'RESILIENT DEMO SESSION'}</span></footer>
+  <footer><span>WELLNESS SUPPORT — NOT MEDICAL DIAGNOSIS</span><span className="session"><i/> {mode==='live'?'API CONNECTED':'LAST SAVED DATA'}</span></footer>
   {checkInOpen&&<CheckInModal userId={account?.userId??'pending-user'} onClose={()=>setCheckInOpen(false)} onSave={saveCheckIn}/>}
   {toast&&<div className="toast" role="status"><Check/>{toast}</div>}
  </div>
@@ -184,7 +219,7 @@ function PrivacyView({mode,account,profile,memories,onPair,onRebuild,onAdd,onDel
    <div className="memory-list">{memories.length?memories.slice(0,8).map(memory=><article key={memory.id}><span>{memoryLabel[memory.type]}</span><p>{memory.summary}</p><small>신뢰도 {Math.round(memory.confidence*100)}% · 근거 {memory.evidenceCount}건</small></article>):<div className="memory-empty">체크인과 추천 피드백이 쌓이면 여기에 개인화 근거가 표시됩니다.</div>}</div>
   </section>
   <div className="privacy-grid"><article><div className="privacy-icon"><HeartPulse/></div><span>HEALTHKIT</span><h2>원본은 기기에,<br/>파생 요약만 동기화</h2><p>허용한 건강 원본 샘플은 iPhone과 Watch에서만 읽고, 사용자가 켠 경우 화면용 일별 요약만 서버로 동기화해요.</p></article><article><div className="privacy-icon"><LockKeyhole/></div><span>ACCOUNT MEMORY</span><h2>서버에는 설명 가능한<br/>개인 메모리만</h2><p>체크인과 피드백에서 만들어진 패턴은 근거 수와 신뢰도를 함께 저장하고 AI 요청 때만 사용해요.</p></article><article><div className="privacy-icon"><ShieldCheck/></div><span>USER CONTROL</span><h2>언제든 기록과 기억을<br/>함께 삭제</h2><p>전체 삭제 시 체크인, 파생 건강 요약, 대화, 추천 피드백, 개인화 메모리까지 모두 제거해요.</p></article></div>
-  <div className="data-status"><div><i className={mode}/><span>현재 연결</span><b>{mode==='live'?'로컬 API · 영구 저장':'복원력 있는 데모 데이터'}</b></div><div><span>AI 사용 범위</span><b>계정별 개인화 · 범용 학습 제외</b></div><button onClick={onDelete}><Trash2/> 기록과 AI 메모리 삭제</button><button className="logout-button" onClick={onLogout}><LogOut/> 로그아웃</button></div><div className="safety-note"><BrainCircuit/><p><b>Morrow는 의료기기나 응급 서비스가 아닙니다.</b> 증상이 지속되거나 긴급한 도움이 필요하면 의료 전문가 또는 지역 응급기관에 연락하세요.</p></div></div>
+  <div className="data-status"><div><i className={mode}/><span>현재 연결</span><b>{mode==='live'?'운영 API · PostgreSQL 영구 저장':'오프라인 · 마지막 동기화 데이터'}</b></div><div><span>AI 사용 범위</span><b>계정별 개인화 · 범용 학습 제외</b></div><button onClick={onDelete}><Trash2/> 기록과 AI 메모리 삭제</button><button className="logout-button" onClick={onLogout}><LogOut/> 로그아웃</button></div><div className="safety-note"><BrainCircuit/><p><b>Morrow는 의료기기나 응급 서비스가 아닙니다.</b> 증상이 지속되거나 긴급한 도움이 필요하면 의료 전문가 또는 지역 응급기관에 연락하세요.</p></div></div>
 }
 
 function CheckInModal({userId,onClose,onSave}:{userId:string;onClose:()=>void;onSave:(input:CheckInInput)=>Promise<void>}){
@@ -193,12 +228,12 @@ function CheckInModal({userId,onClose,onSave}:{userId:string;onClose:()=>void;on
  return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><form className="checkin-modal" onSubmit={submit}><div className="modal-head"><div><span>30-SECOND CHECK-IN</span><h2>지금 어떤 상태인가요?</h2></div><button type="button" onClick={onClose} aria-label="닫기"><X/></button></div><div className="status-options">{statusOptions.map(([value,label,description])=><button type="button" key={value} className={status===value?'selected':''} onClick={()=>setStatus(value)}><i>{status===value&&<Check/>}</i><b>{label}</b><span>{description}</span></button>)}</div><label className="field"><span>무엇과 가장 관련 있나요?</span><div className="cause-options">{causeOptions.map(([value,label])=><button type="button" key={value} className={cause===value?'selected':''} onClick={()=>setCause(value)}>{label}</button>)}</div></label><label className="field"><span>필요하면 맥락을 남겨주세요 <small>선택</small></span><textarea maxLength={500} value={note} onChange={event=>setNote(event.target.value)} placeholder="예: 어제 마감 때문에 늦게 잠들었어요"/><small>{note.length}/500</small></label><button className="save-checkin" disabled={saving}>{saving?<><RefreshCw className="rotating"/> 흐름에 반영 중</>:<><Check/> 체크인 저장</>}</button><p className="modal-foot"><LockKeyhole/> 직접 입력은 생체 신호보다 우선하며 언제든 삭제할 수 있어요.</p></form></div>
 }
 
-function LoadingView(){return <div className="loading-view"><div className="loading-orb"/><span>개인 기준선을 연결하고 있어요</span></div>}
+function LoadingView({error,onRetry}:{error:string;onRetry:()=>void}){return <div className="loading-view"><div className={error?'loading-orb stopped':'loading-orb'}/><span>{error||'개인 기준선을 연결하고 있어요'}</span>{error&&<button onClick={onRetry}><RefreshCw/> 다시 불러오기</button>}</div>}
 
-function WebLoginView({onLogin}:{onLogin:(username:string,password:string)=>Promise<void>}){
+function WebLoginView({onLogin,message}:{onLogin:(username:string,password:string)=>Promise<void>;message:string}){
  const[username,setUsername]=useState('사용자');const[password,setPassword]=useState('');const[loading,setLoading]=useState(false);const[error,setError]=useState('');
- async function submit(event:FormEvent){event.preventDefault();if(!username.trim()||!password)return;setLoading(true);setError('');try{await onLogin(username.trim(),password)}catch{setError('사용자 이름 또는 비밀번호를 확인해 주세요.')}finally{setLoading(false)}}
- return <main className="login-shell"><div className="login-glow"/><section className="login-card"><div className="login-brand"><i>M</i><div><b>MORROW</b><span>HACKATHON DEMO LOGIN</span></div></div><div className="login-copy"><span>ONE ACCOUNT · ALL DEVICES</span><h1>당신의 흐름과<br/>다시 연결하세요</h1><p>하나의 테스트 계정으로 웹, iPhone, Apple Watch의 건강 요약과 AI 대화를 함께 사용합니다.</p></div><form onSubmit={submit}><label><span>사용자 이름</span><input autoComplete="username" value={username} onChange={event=>setUsername(event.target.value)} placeholder="사용자"/></label><label><span>비밀번호</span><input autoComplete="current-password" type="password" value={password} onChange={event=>setPassword(event.target.value)} placeholder="비밀번호 입력"/></label>{error&&<p className="login-error">{error}</p>}<button disabled={loading||!username.trim()||!password}>{loading?<RefreshCw className="rotating"/>:<LockKeyhole/>}{loading?'계정 연결 중':'로그인'}</button></form><footer><ShieldCheck/> 해커톤 시연용 단일 테스트 계정</footer></section></main>
+ async function submit(event:FormEvent){event.preventDefault();if(!username.trim()||!password)return;setLoading(true);setError('');try{await onLogin(username.trim(),password)}catch(reason){setError(reason instanceof ApiRequestError&&reason.status===401?'사용자 이름 또는 비밀번호를 확인해 주세요.':'서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.')}finally{setLoading(false)}}
+ return <main className="login-shell"><div className="login-glow"/><section className="login-card"><div className="login-brand"><i>M</i><div><b>MORROW</b><span>HACKATHON DEMO LOGIN</span></div></div><div className="login-copy"><span>ONE ACCOUNT · ALL DEVICES</span><h1>당신의 흐름과<br/>다시 연결하세요</h1><p>하나의 테스트 계정으로 웹, iPhone, Apple Watch의 건강 요약과 AI 대화를 함께 사용합니다.</p></div>{message&&<p className="login-notice">{message}</p>}<form onSubmit={submit}><label><span>사용자 이름</span><input autoComplete="username" value={username} onChange={event=>setUsername(event.target.value)} placeholder="사용자"/></label><label><span>비밀번호</span><input autoComplete="current-password" type="password" value={password} onChange={event=>setPassword(event.target.value)} placeholder="비밀번호 입력"/></label>{error&&<p className="login-error">{error}</p>}<button disabled={loading||!username.trim()||!password}>{loading?<RefreshCw className="rotating"/>:<LockKeyhole/>}{loading?'계정 연결 중':'로그인'}</button></form><footer><ShieldCheck/> 해커톤 시연용 단일 테스트 계정</footer></section></main>
 }
 
 function translatePattern(value:string){return value.replaceAll('LOW_FOCUS','집중 저하').replaceAll('TIRED','피로').replaceAll('TENSE','긴장').replaceAll('OK','괜찮음').replaceAll('SLEEP','수면').replaceAll('WORK','업무').replaceAll('STUDY','학업')}
