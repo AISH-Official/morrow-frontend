@@ -140,7 +140,6 @@ export default function App(){
  async function pairAccount(code:string){try{const value=await pairWebSession(code);setAccount(value);hydrateAccount(value);await loadData();setToast('iPhone·Watch와 같은 사용자 계정으로 연결됐어요.')}catch{setToast('연결 코드를 확인하고 다시 시도해 주세요.')}}
  async function login(username:string,password:string){const value=await loginWebSession(username,password);setAccount(value);hydrateAccount(value);setLoginMessage('');setLoginRequired(false);await loadData()}
  async function logout(){
-  if(!window.confirm('이 브라우저에서 로그아웃할까요? 서버의 건강 기록은 삭제되지 않습니다.'))return;
   window.speechSynthesis?.cancel();recognition.current?.stop();
   const revocation=logoutWebSession();
   if(account)clearCachedState(account.userId);
