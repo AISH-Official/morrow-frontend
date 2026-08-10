@@ -84,7 +84,45 @@ actor WatchPushRegistrar {
     }
 }
 
-private enum WatchConnectionStore {
+struct WatchAssistantReply: Decodable {
+    let content: String
+    let aiMode: String
+
+    var naturalContent: String {
+        content.replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "“", with: "")
+            .replacingOccurrences(of: "”", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+actor WatchAssistantClient {
+    static let shared = WatchAssistantClient()
+
+    func send(_ content: String) async throws -> WatchAssistantReply {
+        guard let connection = WatchConnectionStore.load(), let root = URL(string: connection.apiRoot) else {
+            throw URLError(.notConnectedToInternet)
+        }
+        let payload = AssistantRequest(userId: connection.userId, content: content)
+        var request = URLRequest(url: root.appending(path: "assistant/messages"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(connection.accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(WatchAssistantReply.self, from: data)
+    }
+
+    private struct AssistantRequest: Encodable {
+        let userId: String
+        let content: String
+    }
+}
+
+enum WatchConnectionStore {
     private static let service = "com.qlsl1198.morrowwellness.watch.auth"
     private static let account = "phone-connection"
     private static var baseQuery: [String: Any] {

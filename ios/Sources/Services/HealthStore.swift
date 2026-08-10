@@ -31,7 +31,7 @@ final class HealthStore: ObservableObject {
                 baselineHRV: 47,
                 hasHealthData: true
             )
-            authorizationMessage = "건강 데이터는 기기 안에서만 분석합니다."
+            authorizationMessage = "원본은 기기에서만 읽고, 승인된 파생 요약만 AI와 동기화합니다."
             lastUpdated = .now
         }
     }

@@ -22,6 +22,112 @@ struct MorrowApp: App {
 }
 
 private struct RootView: View {
+    private enum SessionState { case checking, signedOut, authenticated }
+    @State private var sessionState: SessionState = .checking
+
+    var body: some View {
+        Group {
+            switch sessionState {
+            case .checking:
+                ZStack {
+                    Theme.screenBackground.ignoresSafeArea()
+                    ProgressView("계정 연결 확인 중").tint(Theme.accent).foregroundStyle(Theme.textSecondary)
+                }
+            case .signedOut:
+                DemoLoginView { sessionState = .authenticated }
+            case .authenticated:
+                AuthenticatedRootView()
+            }
+        }
+        .task {
+            guard sessionState == .checking else { return }
+            sessionState = await MorrowAPIClient.shared.hasStoredCredentials() ? .authenticated : .signedOut
+        }
+    }
+}
+
+private struct DemoLoginView: View {
+    @State private var username = "사용자"
+    @State private var password = ""
+    @State private var isLoggingIn = false
+    @State private var errorMessage = ""
+    let onSuccess: () -> Void
+
+    var body: some View {
+        ZStack {
+            Theme.screenBackground.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 20) {
+                Spacer()
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("MORROW").font(.system(size: 25, weight: .bold, design: .monospaced)).tracking(5).foregroundStyle(Theme.textPrimary)
+                    Text("HACKATHON DEMO LOGIN").morrowKicker()
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("테스트 계정으로 시작하기", systemImage: "person.crop.circle.badge.checkmark")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    TextField("사용자 이름", text: $username)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                        .loginField()
+                    SecureField("비밀번호", text: $password)
+                        .textContentType(.password)
+                        .loginField()
+                    if !errorMessage.isEmpty {
+                        Text(errorMessage).font(.caption).foregroundStyle(.red)
+                    }
+                    Button { Task { await login() } } label: {
+                        HStack {
+                            if isLoggingIn { ProgressView().tint(Theme.screenBackground) }
+                            Text(isLoggingIn ? "로그인 중" : "로그인")
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(Theme.screenBackground)
+                        .padding(.horizontal, 16)
+                        .frame(height: 52)
+                        .background(LinearGradient(colors: [Theme.accent, Theme.mint], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .disabled(isLoggingIn || username.isEmpty || password.isEmpty)
+                }
+                .padding(18)
+                .morrowPanel(cornerRadius: 20)
+                Text("해커톤 시연용 단일 계정입니다. 로그인 후 iPhone과 Watch가 같은 건강 요약과 AI 대화를 사용합니다.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textMuted)
+                Spacer()
+            }
+            .padding(22)
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    @MainActor
+    private func login() async {
+        isLoggingIn = true
+        errorMessage = ""
+        defer { isLoggingIn = false }
+        do {
+            _ = try await MorrowAPIClient.shared.login(username: username, password: password)
+            onSuccess()
+        } catch {
+            errorMessage = "사용자 이름 또는 비밀번호를 확인해 주세요."
+        }
+    }
+}
+
+private extension View {
+    func loginField() -> some View {
+        padding(.horizontal, 14)
+            .frame(height: 50)
+            .background(Theme.elevatedBackground, in: RoundedRectangle(cornerRadius: 13))
+            .overlay(RoundedRectangle(cornerRadius: 13).stroke(Theme.border))
+            .foregroundStyle(Theme.textPrimary)
+    }
+}
+
+private struct AuthenticatedRootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var healthStore: HealthStore
@@ -41,7 +147,7 @@ private struct RootView: View {
             }
             .onChange(of: watchReceiver.inboxVersion) { _, _ in importWatchCheckIns() }
             .onChange(of: watchReceiver.healthInboxVersion) { _, _ in importWatchHealth() }
-            .onChange(of: healthSignature) { _, _ in syncWatchContext(); Task { await synchronize(); await notifyIfNeeded() } }
+            .onChange(of: healthSignature) { _, _ in syncWatchContext(); Task { await synchronize() } }
             .onChange(of: checkInSignature) { _, _ in Task { await synchronize() } }
             .onChange(of: scenePhase) { _, phase in if phase == .active { importWatchCheckIns(); syncWatchContext(); Task { await synchronize() } } }
     }
@@ -86,6 +192,8 @@ private struct RootView: View {
 
     private func synchronize() async {
         await syncService.synchronize(checkIns: checkIns, snapshot: syncDerivedHealth ? healthStore.snapshot : nil)
+        guard notificationsEnabled, let insight = await notificationManager.evaluateAIInsight() else { return }
+        watchReceiver.sendAIInsight(title: insight.title, body: insight.body, generatedAt: .now)
     }
 
     private func configureNotifications() async {
@@ -94,11 +202,6 @@ private struct RootView: View {
         await notificationManager.scheduleDailyCheckIns()
     }
 
-    private func notifyIfNeeded() async {
-        guard notificationsEnabled else { return }
-        let result = analyzer.analyze(current: healthStore.snapshot)
-        await notificationManager.scheduleRecoveryAlertIfNeeded(load: result.load, summary: LoadLevel(load: result.load).label)
-    }
 }
 
 @MainActor
@@ -188,6 +291,8 @@ private extension WellnessCause {
 final class PhoneNotificationManager: ObservableObject {
     @Published private(set) var statusText = "알림 권한 확인 전"
     private let center = UNUserNotificationCenter.current()
+    private let analysisKey = "morrow.notifications.ai.lastAnalysis"
+    private let notificationKey = "morrow.notifications.ai.lastDelivery"
 
     func requestAuthorization() async {
         do {
@@ -214,6 +319,33 @@ final class PhoneNotificationManager: ObservableObject {
         content.sound = .default
         try? await center.add(UNNotificationRequest(identifier: "morrow.recovery", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)))
         UserDefaults.standard.set(Date(), forKey: key)
+    }
+
+    func evaluateAIInsight() async -> AIProactiveInsight? {
+        let lastAnalysis = UserDefaults.standard.object(forKey: analysisKey) as? Date ?? .distantPast
+        guard Date().timeIntervalSince(lastAnalysis) > 90 * 60 else { return nil }
+        UserDefaults.standard.set(Date(), forKey: analysisKey)
+        guard let insight = try? await MorrowAPIClient.shared.proactiveInsight(), insight.shouldNotify else { return nil }
+
+        let lastDelivery = UserDefaults.standard.object(forKey: notificationKey) as? Date ?? .distantPast
+        guard Date().timeIntervalSince(lastDelivery) > 6 * 60 * 60 else { return nil }
+        let content = UNMutableNotificationContent()
+        content.title = insight.title
+        content.body = insight.body
+        content.sound = .default
+        content.userInfo = ["type": "AI_INSIGHT", "reason": insight.reason]
+        let request = UNNotificationRequest(
+            identifier: "morrow.ai.insight.\(Int(Date().timeIntervalSince1970))",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+        )
+        do {
+            try await center.add(request)
+        } catch {
+            return nil
+        }
+        UserDefaults.standard.set(Date(), forKey: notificationKey)
+        return insight
     }
 
     func disable() {

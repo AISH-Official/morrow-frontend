@@ -35,7 +35,7 @@ struct SettingsView: View {
                         else { notifications.disable() }
                     }
                 LabeledContent("iPhone", value: notifications.statusText)
-                Text("매일 오전 10시와 오후 8시 30분 체크인 알림, 회복 부하가 높을 때 최대 6시간에 한 번 회복 알림을 보냅니다. Watch 앱은 워치 자체 알림을 별도로 예약합니다.")
+                Text("기본 체크인 알림과 함께 AI가 최근 건강 요약과 체크인 흐름에서 도움이 된다고 판단한 맞춤 알림을 최대 6시간에 한 번 보냅니다.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("데이터와 개인정보") {
@@ -105,7 +105,7 @@ private struct PrivacyPolicyView: View {
                 Text("개인정보 처리방침").font(.title2.bold())
                 policySection("수집 및 이용", "Morrow는 사용자가 허용한 수면, 걸음, 심박, 안정 시 심박, HRV, 활동 에너지, 운동 시간, 거리, 오른 층수, 호흡수와 산소포화도를 HealthKit에서 읽어 개인 웰니스 요약을 생성합니다. 기기에서 제공되지 않는 항목은 수집하지 않습니다.")
                 policySection("저장 및 동기화", "HealthKit 원본 샘플은 서버나 iCloud에 저장하지 않습니다. 동기화를 켜면 일별 파생 요약과 사용자가 작성한 체크인을 Morrow 서버에 저장해 iPhone, Watch, 웹에서 같은 흐름을 보여줍니다.")
-                policySection("공유", "건강 데이터와 체크인 기록을 광고, 판매, 제3자 마케팅 또는 범용 AI 모델 학습에 사용하거나 제공하지 않습니다.")
+                policySection("AI 사용", "사용자가 승인한 파생 건강 요약과 체크인 맥락은 대화 답변과 맞춤 알림을 생성할 때 설정된 AI 제공자에게 전송됩니다. 광고, 판매, 제3자 마케팅이나 Morrow의 범용 모델 학습에는 사용하지 않습니다.")
                 policySection("삭제와 제어", "설정에서 로컬 체크인 기록을 삭제하고 파생 요약 동기화를 끌 수 있습니다. 서버 데이터는 웹의 데이터 삭제 기능에서 지울 수 있으며 HealthKit 접근 권한은 iPhone 설정에서 언제든 변경할 수 있습니다.")
                 policySection("안내", "Morrow는 의료기기나 응급 서비스가 아니며 질환을 진단하거나 치료하지 않습니다. 긴급한 도움이 필요하면 지역 응급기관이나 의료 전문가에게 연락하세요.")
                 policySection("문의", "개인정보 관련 문의: github.com/qlsl1198")

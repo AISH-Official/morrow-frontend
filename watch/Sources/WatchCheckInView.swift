@@ -49,9 +49,7 @@ struct WatchCheckInView: View {
             await health.requestAuthorizationAndLoad()
             session.sendHealthSummary(health.snapshot)
             await notifications.configure()
-            await notifications.recoveryAlert(load: session.context.load)
         }
-        .onChange(of: session.context.load) { _, load in Task { await notifications.recoveryAlert(load: load) } }
     }
 
     private var brandHeader: some View {
@@ -121,6 +119,7 @@ struct WatchCheckInView: View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)], spacing: 7) {
             NavigationLink(destination: QuickCheckInView()) { action("체크인", "plus.circle.fill", WatchTheme.accent) }.buttonStyle(.plain)
             NavigationLink(destination: RecoverySessionView()) { action("1분 회복", "wind", WatchTheme.mint) }.buttonStyle(.plain)
+            NavigationLink(destination: WatchAssistantView()) { action("AI 대화", "sparkles", WatchTheme.accent) }.buttonStyle(.plain)
             Button {
                 Task { await health.requestAuthorizationAndLoad(); session.sendHealthSummary(health.snapshot) }
             } label: { action("데이터 갱신", "arrow.clockwise.heart.fill", .orange) }.buttonStyle(.plain)
@@ -148,10 +147,97 @@ private struct WatchNotificationSettingsView: View {
             VStack(spacing: 12) {
                 Image(systemName: "bell.badge.fill").font(.system(size: 32)).foregroundStyle(WatchTheme.accent)
                 Text(notifications.statusText).font(.headline).multilineTextAlignment(.center)
-                Text("매일 체크인 2회와 높은 회복 부하 알림을 Watch에서 직접 예약합니다.").font(.caption2).foregroundStyle(WatchTheme.muted).multilineTextAlignment(.center)
+                Text("매일 체크인과 AI가 최근 흐름에서 필요하다고 판단한 맞춤 알림을 Watch에서 받아요.").font(.caption2).foregroundStyle(WatchTheme.muted).multilineTextAlignment(.center)
                 Button("알림 다시 설정") { Task { await notifications.configure() } }.buttonStyle(.borderedProminent).tint(WatchTheme.accent)
             }.padding(.vertical, 10)
         }.navigationTitle("알림")
+    }
+}
+
+private struct WatchAIMessage: Identifiable {
+    enum Role { case user, assistant }
+    let id = UUID()
+    let role: Role
+    let content: String
+}
+
+private struct WatchAssistantView: View {
+    @EnvironmentObject private var session: WatchSessionManager
+    @State private var question = ""
+    @State private var isSending = false
+    @State private var messages = [
+        WatchAIMessage(role: .assistant, content: "최근 건강 흐름에 대해 무엇이든 물어보세요.")
+    ]
+    private let suggestions = ["지금 컨디션은?", "걸음 수 알려줘", "회복 방법 추천해줘"]
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    connectionBadge
+                    ForEach(messages.suffix(6)) { message in
+                        Text(message.content)
+                            .font(.caption2)
+                            .foregroundStyle(message.role == .user ? .black : .white)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 7)
+                            .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
+                            .background(message.role == .user ? WatchTheme.accent : WatchTheme.panel, in: RoundedRectangle(cornerRadius: 11))
+                            .overlay(RoundedRectangle(cornerRadius: 11).stroke(message.role == .user ? .clear : WatchTheme.border))
+                            .id(message.id)
+                    }
+                    if isSending {
+                        HStack { ProgressView(); Text("분석 중").font(.caption2).foregroundStyle(WatchTheme.muted) }
+                    }
+                    ForEach(suggestions, id: \.self) { suggestion in
+                        Button(suggestion) { Task { await send(suggestion) } }
+                            .buttonStyle(.bordered)
+                            .tint(WatchTheme.accent)
+                            .disabled(isSending || !session.isServerConnected)
+                    }
+                    HStack {
+                        TextField("질문 입력", text: $question)
+                        Button { Task { await send(question) } } label: { Image(systemName: "arrow.up.circle.fill") }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(WatchTheme.accent)
+                            .disabled(isSending || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !session.isServerConnected)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .onChange(of: messages.count) { _, _ in
+                guard let last = messages.last else { return }
+                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+            }
+        }
+        .navigationTitle("Morrow AI")
+    }
+
+    private var connectionBadge: some View {
+        Label(session.isServerConnected ? "AI CLOUD 연결됨" : "iPhone에서 계정 연결 필요", systemImage: session.isServerConnected ? "cloud.fill" : "iphone.slash")
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .foregroundStyle(session.isServerConnected ? WatchTheme.mint : .orange)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(WatchTheme.panel, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @MainActor
+    private func send(_ value: String) async {
+        let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, !isSending, session.isServerConnected else { return }
+        messages.append(WatchAIMessage(role: .user, content: clean))
+        question = ""
+        isSending = true
+        defer { isSending = false }
+        do {
+            let reply = try await WatchAssistantClient.shared.send(clean)
+            messages.append(WatchAIMessage(role: .assistant, content: reply.naturalContent))
+            WKInterfaceDevice.current().play(.success)
+        } catch {
+            messages.append(WatchAIMessage(role: .assistant, content: "지금은 AI에 연결하지 못했어요. iPhone 연결을 확인해 주세요."))
+            WKInterfaceDevice.current().play(.failure)
+        }
     }
 }
 

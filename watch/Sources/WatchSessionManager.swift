@@ -32,6 +32,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     override init() {
         super.init()
         restoreRecentCheckIn()
+        isServerConnected = WatchConnectionStore.load() != nil
         if WCSession.isSupported() {
             WCSession.default.delegate = self
             WCSession.default.activate()
@@ -89,6 +90,12 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
            let accessToken = values["accessToken"] as? String {
             let connection = WatchServerConnection(apiRoot: apiRoot, userId: userId, accessToken: accessToken)
             Task { await WatchPushRegistrar.shared.updateConnection(connection) }
+        }
+        if let title = values["aiInsightTitle"] as? String,
+           let body = values["aiInsightBody"] as? String,
+           let dateValue = values["aiInsightAt"] as? String,
+           let generatedAt = ISO8601DateFormatter().date(from: dateValue) {
+            Task { await WatchNotificationManager.shared.aiInsight(title: title, body: body, generatedAt: generatedAt) }
         }
         DispatchQueue.main.async {
             self.isServerConnected = values["apiRoot"] as? String != nil && values["accessToken"] as? String != nil

@@ -51,6 +51,8 @@ function storedSession():WebSession|null{
  try{const value=window.localStorage.getItem(SESSION_KEY);return value?JSON.parse(value) as WebSession:null}catch{return null}
 }
 
+export function getStoredWebSession():WebSession|null{return storedSession()}
+
 function installationId():string{
  const existing=window.localStorage.getItem(INSTALLATION_KEY);if(existing)return existing;
  const value=crypto.randomUUID();window.localStorage.setItem(INSTALLATION_KEY,value);return value;
@@ -68,6 +70,11 @@ export async function getWebSession():Promise<WebSession>{
 
 export async function pairWebSession(pairingCode:string):Promise<WebSession>{
  const value=await rawRequest<WebSession>('/auth/pair',{method:'POST',body:JSON.stringify({pairingCode,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})},false);
+ return saveSession(value);
+}
+
+export async function loginWebSession(username:string,password:string):Promise<WebSession>{
+ const value=await rawRequest<WebSession>('/auth/login',{method:'POST',body:JSON.stringify({username,password,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})},false);
  return saveSession(value);
 }
 

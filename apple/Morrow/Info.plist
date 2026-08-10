@@ -25,7 +25,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Morrow는 건강 데이터 권한을 안전하게 관리하기 위해 HealthKit 접근을 사용하며 건강 데이터를 추가하거나 변경하지 않습니다.</string>
 	<key>MORROW_API_BASE_URL</key>
-	<string>http://localhost:8080/api/v1</string>
+	<string>https://9x4mms7o9g.execute-api.ap-southeast-2.amazonaws.com/api/v1</string>
 	<key>MORROW_USER_ID</key>
 	<string>default-user</string>
 	<key>NSAppTransportSecurity</key>

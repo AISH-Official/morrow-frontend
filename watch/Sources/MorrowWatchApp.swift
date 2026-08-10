@@ -111,6 +111,28 @@ final class WatchNotificationManager: ObservableObject {
         UserDefaults.standard.set(Date(), forKey: key)
     }
 
+    func aiInsight(title: String, body: String, generatedAt: Date) async {
+        let deliveryKey = "morrow.watch.notifications.lastAIInsight"
+        let lastDelivery = UserDefaults.standard.object(forKey: deliveryKey) as? Date ?? .distantPast
+        guard generatedAt > lastDelivery, generatedAt.timeIntervalSince(lastDelivery) > 6 * 60 * 60 else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.userInfo = ["type": "AI_INSIGHT"]
+        let request = UNNotificationRequest(
+            identifier: "morrow.watch.ai.\(Int(generatedAt.timeIntervalSince1970))",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
+        )
+        do {
+            try await center.add(request)
+            UserDefaults.standard.set(generatedAt, forKey: deliveryKey)
+        } catch {
+            statusText = "AI 알림 예약 실패"
+        }
+    }
+
     private func daily(_ id: String, _ hour: Int, _ minute: Int, _ title: String, _ body: String) async {
         let content = UNMutableNotificationContent(); content.title = title; content.body = body; content.sound = .default
         try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute), repeats: true)))

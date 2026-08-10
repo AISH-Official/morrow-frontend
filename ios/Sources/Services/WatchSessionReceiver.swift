@@ -75,6 +75,16 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
         try? WCSession.default.updateApplicationContext(context)
     }
 
+    func sendAIInsight(title: String, body: String, generatedAt: Date) {
+        var context = pendingContext ?? [:]
+        context["aiInsightTitle"] = title
+        context["aiInsightBody"] = body
+        context["aiInsightAt"] = ISO8601DateFormatter().string(from: generatedAt)
+        pendingContext = context
+        guard WCSession.default.activationState == .activated else { return }
+        try? WCSession.default.updateApplicationContext(context)
+    }
+
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
         if userInfo["kind"] as? String == "healthSummary" {
             let date = (userInfo["recordedAt"] as? String).flatMap(ISO8601DateFormatter().date(from:)) ?? .now

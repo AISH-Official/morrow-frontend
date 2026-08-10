@@ -1,6 +1,6 @@
 import{FormEvent,useEffect,useMemo,useRef,useState}from'react';
 import{Activity,Archive,BarChart3,BrainCircuit,Check,ChevronRight,Command,Footprints,HeartPulse,History,LockKeyhole,Mic,MicOff,MoonStar,Plus,RefreshCw,Send,Settings2,ShieldCheck,Signal,Sparkles,ThumbsDown,ThumbsUp,Trash2,Volume2,VolumeX,Watch,X}from'lucide-react';
-import{addPersonalMemory,appendLocalCheckIn,clearWellnessData,createCheckIn,getDashboard,getPersonalization,getWeeklyReport,getWebSession,pairWebSession,rebuildPersonalization,sendAssistantMessage,submitRecommendationFeedback}from'./api';
+import{addPersonalMemory,appendLocalCheckIn,clearWellnessData,createCheckIn,getDashboard,getPersonalization,getStoredWebSession,getWeeklyReport,getWebSession,loginWebSession,pairWebSession,rebuildPersonalization,sendAssistantMessage,submitRecommendationFeedback}from'./api';
 import type{WebSession}from'./api';
 import type{CheckInCause,CheckInInput,CheckInStatus,ConnectionMode,Dashboard,PersonalizationProfile,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
 
@@ -37,11 +37,12 @@ export default function App(){
  const[memories,setMemories]=useState<UserMemory[]>([]);
  const[aiMode,setAiMode]=useState<'LIVE'|'FALLBACK'|'LOCAL'|'UNKNOWN'>('UNKNOWN');
  const[account,setAccount]=useState<WebSession|null>(null);
+ const[loginRequired,setLoginRequired]=useState(()=>getStoredWebSession()===null);
  const recognition=useRef<RecognitionLike|null>(null);
  const nextId=useRef(3);
  const particles=useMemo(()=>Array.from({length:34},(_,index)=>({left:`${(index*47)%100}%`,top:`${(index*71)%100}%`,delay:`-${(index%13)*.37}s`,size:1+(index%3)})),[]);
 
- useEffect(()=>{void getWebSession().then(setAccount).catch(()=>setAccount(null));void loadData();return()=>{recognition.current?.stop();window.speechSynthesis?.cancel()}},[]);
+ useEffect(()=>{const stored=getStoredWebSession();if(stored){setAccount(stored);void loadData()}return()=>{recognition.current?.stop();window.speechSynthesis?.cancel()}},[]);
  useEffect(()=>{if(!toast)return;const timer=window.setTimeout(()=>setToast(''),2800);return()=>window.clearTimeout(timer)},[toast]);
 
  async function loadData(showSpinner=false){
@@ -104,10 +105,12 @@ export default function App(){
  async function rebuildLearning(){try{await rebuildPersonalization();const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('전체 기록에서 개인화 메모리를 다시 학습했어요.')}catch{setToast('백엔드에 연결한 뒤 다시 시도해 주세요.')}}
  async function addMemory(type:'PREFERENCE'|'GOAL',summary:string){try{await addPersonalMemory(type,summary);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('직접 알려준 내용을 개인화 메모리에 저장했어요.')}catch{setToast('메모리를 저장하지 못했어요.')}}
  async function pairAccount(code:string){try{const value=await pairWebSession(code);setAccount(value);await loadData();setToast('iPhone·Watch와 같은 사용자 계정으로 연결됐어요.')}catch{setToast('연결 코드를 확인하고 다시 시도해 주세요.')}}
+ async function login(username:string,password:string){const value=await loginWebSession(username,password);setAccount(value);setLoginRequired(false);await loadData()}
 
  const phaseText={idle:'무엇이든 이야기해 주세요',listening:'듣고 있어요',thinking:'당신의 흐름을 살펴보고 있어요',speaking:'답변하고 있어요'}[phase];
  const navItems:[ViewKey,string,typeof Command][]=[['today','오늘',Command],['timeline','타임라인',History],['report','주간 리포트',BarChart3],['privacy','데이터',Archive]];
 
+ if(loginRequired)return <WebLoginView onLogin={login}/>;
  return <div className={`app-shell phase-${phase}`}>
   <div className="atmosphere"/><div className="grid-floor"/>
   <aside className="rail" aria-label="주요 메뉴"><button className="mark" onClick={()=>setView('today')} aria-label="Morrow 홈">M</button><nav>{navItems.map(([key,label,Icon])=><button key={key} className={view===key?'on':''} onClick={()=>setView(key)} aria-label={label} title={label}><Icon/></button>)}</nav><a className="device-link" href={`${import.meta.env.BASE_URL}device-preview/`} aria-label="기기 경험 보기" title="기기 경험"><Watch/></a><button className="settings" onClick={()=>setView('privacy')} aria-label="설정"><Settings2/></button></aside>
@@ -184,6 +187,12 @@ function CheckInModal({userId,onClose,onSave}:{userId:string;onClose:()=>void;on
 }
 
 function LoadingView(){return <div className="loading-view"><div className="loading-orb"/><span>개인 기준선을 연결하고 있어요</span></div>}
+
+function WebLoginView({onLogin}:{onLogin:(username:string,password:string)=>Promise<void>}){
+ const[username,setUsername]=useState('사용자');const[password,setPassword]=useState('');const[loading,setLoading]=useState(false);const[error,setError]=useState('');
+ async function submit(event:FormEvent){event.preventDefault();if(!username.trim()||!password)return;setLoading(true);setError('');try{await onLogin(username.trim(),password)}catch{setError('사용자 이름 또는 비밀번호를 확인해 주세요.')}finally{setLoading(false)}}
+ return <main className="login-shell"><div className="login-glow"/><section className="login-card"><div className="login-brand"><i>M</i><div><b>MORROW</b><span>HACKATHON DEMO LOGIN</span></div></div><div className="login-copy"><span>ONE ACCOUNT · ALL DEVICES</span><h1>당신의 흐름과<br/>다시 연결하세요</h1><p>하나의 테스트 계정으로 웹, iPhone, Apple Watch의 건강 요약과 AI 대화를 함께 사용합니다.</p></div><form onSubmit={submit}><label><span>사용자 이름</span><input autoComplete="username" value={username} onChange={event=>setUsername(event.target.value)} placeholder="사용자"/></label><label><span>비밀번호</span><input autoComplete="current-password" type="password" value={password} onChange={event=>setPassword(event.target.value)} placeholder="비밀번호 입력"/></label>{error&&<p className="login-error">{error}</p>}<button disabled={loading||!username.trim()||!password}>{loading?<RefreshCw className="rotating"/>:<LockKeyhole/>}{loading?'계정 연결 중':'로그인'}</button></form><footer><ShieldCheck/> 해커톤 시연용 단일 테스트 계정</footer></section></main>
+}
 
 function translatePattern(value:string){return value.replaceAll('LOW_FOCUS','집중 저하').replaceAll('TIRED','피로').replaceAll('TENSE','긴장').replaceAll('OK','괜찮음').replaceAll('SLEEP','수면').replaceAll('WORK','업무').replaceAll('STUDY','학업')}
 
