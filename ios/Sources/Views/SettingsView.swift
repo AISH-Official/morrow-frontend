@@ -2,12 +2,15 @@ import SwiftUI
 import SwiftData
 
 struct SettingsView: View {
+    let onLogout: () async -> Void
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var syncService: MorrowSyncService
     @EnvironmentObject private var notifications: PhoneNotificationManager
     @AppStorage("morrow.sync.derivedHealth") private var syncDerivedHealth = true
     @AppStorage("morrow.notifications.enabled") private var notificationsEnabled = true
     @State private var showDeleteConfirmation = false
+    @State private var showLogoutConfirmation = false
+    @State private var isLoggingOut = false
     @State private var deletionCompleted = false
     @State private var apiURL = MorrowRuntimeConfiguration.apiRootString
     @State private var pairingCode = "연결 중"
@@ -49,6 +52,19 @@ struct SettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            Section("계정") {
+                Button(role: .destructive) { showLogoutConfirmation = true } label: {
+                    HStack {
+                        Label(isLoggingOut ? "로그아웃 중" : "로그아웃", systemImage: "rectangle.portrait.and.arrow.right")
+                        Spacer()
+                        if isLoggingOut { ProgressView() }
+                    }
+                }
+                .disabled(isLoggingOut)
+                Text("이 iPhone과 연결된 Apple Watch의 로그인 정보만 지워지며 서버의 건강 기록은 삭제되지 않습니다.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Section("앱 정보") {
                 LabeledContent("버전", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
             }
@@ -62,6 +78,15 @@ struct SettingsView: View {
             Button("취소", role: .cancel) {}
         } message: {
             Text("삭제된 기록은 복구할 수 없습니다. HealthKit 원본 데이터는 삭제하지 않습니다.")
+        }
+        .confirmationDialog("로그아웃할까요?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+            Button("로그아웃", role: .destructive) {
+                isLoggingOut = true
+                Task { await onLogout() }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("건강 기록은 유지되고 이 기기의 인증정보만 제거됩니다.")
         }
         .alert("삭제했습니다", isPresented: $deletionCompleted) { Button("확인", role: .cancel) {} }
         .task { await loadConnection() }

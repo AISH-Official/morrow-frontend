@@ -66,10 +66,23 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
 
     func sendConnectionContext(apiRoot: String, credentials: MorrowCredentials) {
         var context = pendingContext ?? [:]
+        context.removeValue(forKey: "loggedOut")
         context["apiRoot"] = apiRoot
         context["userId"] = credentials.userId
         context["accessToken"] = credentials.accessToken
         context["pairingCode"] = credentials.pairingCode
+        pendingContext = context
+        guard WCSession.default.activationState == .activated else { return }
+        try? WCSession.default.updateApplicationContext(context)
+    }
+
+    func sendLogoutContext() {
+        var context = pendingContext ?? [:]
+        context.removeValue(forKey: "apiRoot")
+        context.removeValue(forKey: "userId")
+        context.removeValue(forKey: "accessToken")
+        context.removeValue(forKey: "pairingCode")
+        context["loggedOut"] = true
         pendingContext = context
         guard WCSession.default.activationState == .activated else { return }
         try? WCSession.default.updateApplicationContext(context)

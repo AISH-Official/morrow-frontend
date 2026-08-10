@@ -39,6 +39,13 @@ actor WatchPushRegistrar {
         await registerIfReady()
     }
 
+    func clearConnection() {
+        connection = nil
+        WatchConnectionStore.clear()
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+    }
+
     func updateDeviceToken(_ value: String) async {
         token = value
         UserDefaults.standard.set(value, forKey: "morrow.watch.push.token")
@@ -145,5 +152,9 @@ enum WatchConnectionStore {
         query[kSecValueData as String] = data
         query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(query as CFDictionary, nil)
+    }
+
+    static func clear() {
+        SecItemDelete(baseQuery as CFDictionary)
     }
 }

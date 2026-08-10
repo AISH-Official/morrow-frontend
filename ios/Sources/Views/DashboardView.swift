@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct DashboardView: View {
+    let onLogout: () async -> Void
     @EnvironmentObject private var health: HealthStore
     @EnvironmentObject private var syncService: MorrowSyncService
     @Query(sort: \CheckInRecord.recordedAt, order: .reverse) private var checkIns: [CheckInRecord]
@@ -79,7 +80,7 @@ struct DashboardView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     NavigationLink(destination: CheckInHistoryView()) { Image(systemName: "clock.arrow.circlepath") }
-                    NavigationLink(destination: SettingsView()) { Image(systemName: "slider.horizontal.3") }
+                    NavigationLink(destination: SettingsView(onLogout: onLogout)) { Image(systemName: "slider.horizontal.3") }
                 }
             }
             .tint(Theme.accent)

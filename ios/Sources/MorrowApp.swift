@@ -36,7 +36,7 @@ private struct RootView: View {
             case .signedOut:
                 DemoLoginView { sessionState = .authenticated }
             case .authenticated:
-                AuthenticatedRootView()
+                AuthenticatedRootView { sessionState = .signedOut }
             }
         }
         .task {
@@ -128,6 +128,7 @@ private extension View {
 }
 
 private struct AuthenticatedRootView: View {
+    let onLogout: () -> Void
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var healthStore: HealthStore
@@ -140,7 +141,7 @@ private struct AuthenticatedRootView: View {
     private let analyzer = BaselineAnalyzer()
 
     var body: some View {
-        DashboardView()
+        DashboardView(onLogout: logout)
             .onAppear {
                 watchReceiver.activate(); importWatchCheckIns(); syncWatchContext()
                 Task { await configureNotifications(); await synchronize() }
@@ -150,6 +151,14 @@ private struct AuthenticatedRootView: View {
             .onChange(of: healthSignature) { _, _ in syncWatchContext(); Task { await synchronize() } }
             .onChange(of: checkInSignature) { _, _ in Task { await synchronize() } }
             .onChange(of: scenePhase) { _, phase in if phase == .active { importWatchCheckIns(); syncWatchContext(); Task { await synchronize() } } }
+    }
+
+    @MainActor
+    private func logout() async {
+        notificationManager.disable()
+        watchReceiver.sendLogoutContext()
+        onLogout()
+        await MorrowAPIClient.shared.logout()
     }
 
     private func importWatchCheckIns() {
@@ -349,7 +358,9 @@ final class PhoneNotificationManager: ObservableObject {
     }
 
     func disable() {
-        center.removePendingNotificationRequests(withIdentifiers: ["morrow.checkin.morning", "morrow.checkin.evening", "morrow.recovery"])
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+        UIApplication.shared.unregisterForRemoteNotifications()
         statusText = "Morrow 알림 꺼짐"
     }
 

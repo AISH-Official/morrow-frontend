@@ -78,6 +78,17 @@ export async function loginWebSession(username:string,password:string):Promise<W
  return saveSession(value);
 }
 
+export async function logoutWebSession():Promise<void>{
+ try{
+  if(storedSession())await rawRequest<void>('/auth/logout',{method:'POST'},true,false);
+ }catch{
+  // Network failures must not trap someone in a signed-in state on this browser.
+ }finally{
+  window.localStorage.removeItem(SESSION_KEY);
+  pendingSession=null;
+ }
+}
+
 async function request<T>(path:string,init?:RequestInit):Promise<T>{return rawRequest<T>(path,init,true)}
 
 async function userPath(path:string):Promise<string>{const session=await getWebSession();return `${path}${path.includes('?')?'&':'?'}userId=${encodeURIComponent(session.userId)}`}

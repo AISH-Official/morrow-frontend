@@ -85,6 +85,14 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private func apply(_ values: [String: Any]) {
+        if values["loggedOut"] as? Bool == true {
+            Task { await WatchPushRegistrar.shared.clearConnection() }
+            DispatchQueue.main.async {
+                self.isServerConnected = false
+                self.pairingCode = ""
+            }
+            return
+        }
         if let apiRoot = values["apiRoot"] as? String,
            let userId = values["userId"] as? String,
            let accessToken = values["accessToken"] as? String {
