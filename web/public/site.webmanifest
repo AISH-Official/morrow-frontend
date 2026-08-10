@@ -1,0 +1,23 @@
+{
+  "name": "Morrow | Personal Wellness Intelligence",
+  "short_name": "Morrow",
+  "description": "건강 데이터와 직접 체크인을 연결해 나만의 회복 흐름을 이해합니다.",
+  "lang": "ko-KR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#03080c",
+  "theme_color": "#07151d",
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
