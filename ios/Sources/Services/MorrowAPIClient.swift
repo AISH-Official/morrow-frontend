@@ -79,18 +79,16 @@ actor MorrowAPIClient {
         return value
     }
 
-    func logout() async {
+    func logout() {
         let credentials = cachedCredentials ?? DeviceCredentialStore.load()
-        defer {
-            cachedCredentials = nil
-            DeviceCredentialStore.clear()
-        }
+        cachedCredentials = nil
+        DeviceCredentialStore.clear()
         guard let credentials, let root = MorrowRuntimeConfiguration.apiRoot else { return }
         var request = URLRequest(url: root.appending(path: "auth/logout"))
         request.httpMethod = "POST"
         request.timeoutInterval = 5
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        _ = try? await URLSession.shared.data(for: request)
+        Task { _ = try? await URLSession.shared.data(for: request) }
     }
 
     func credentials() async throws -> MorrowCredentials {

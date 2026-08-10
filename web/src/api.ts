@@ -79,13 +79,18 @@ export async function loginWebSession(username:string,password:string):Promise<W
 }
 
 export async function logoutWebSession():Promise<void>{
+ const session=storedSession();
+ window.localStorage.removeItem(SESSION_KEY);
+ pendingSession=null;
+ if(!session)return;
+ const controller=new AbortController();
+ const timer=window.setTimeout(()=>controller.abort(),REQUEST_TIMEOUT);
  try{
-  if(storedSession())await rawRequest<void>('/auth/logout',{method:'POST'},true,false);
+  await fetch(`${API_ROOT}/auth/logout`,{method:'POST',signal:controller.signal,headers:{Authorization:`Bearer ${session.accessToken}`}});
  }catch{
   // Network failures must not trap someone in a signed-in state on this browser.
  }finally{
-  window.localStorage.removeItem(SESSION_KEY);
-  pendingSession=null;
+  window.clearTimeout(timer);
  }
 }
 

@@ -155,10 +155,10 @@ private struct AuthenticatedRootView: View {
 
     @MainActor
     private func logout() async {
+        await MorrowAPIClient.shared.logout()
         notificationManager.disable()
         watchReceiver.sendLogoutContext()
         onLogout()
-        await MorrowAPIClient.shared.logout()
     }
 
     private func importWatchCheckIns() {
