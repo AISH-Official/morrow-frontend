@@ -96,9 +96,12 @@ export async function getWeeklyReport():Promise<WeeklyReport>{
 
 export async function sendAssistantMessage(content:string):Promise<AssistantResult>{
  try{
-  const session=await getWebSession();return await request<AssistantResult>('/assistant/messages',{method:'POST',body:JSON.stringify({userId:session.userId,content})});
+  const session=await getWebSession();const result=await request<AssistantResult>('/assistant/messages',{method:'POST',body:JSON.stringify({userId:session.userId,content})});
+  return{...result,content:normalizeAssistantText(result.content)};
  }catch{return{content:localAssistantResponse(content),aiMode:'LOCAL',personalizationEvidenceCount:0,personalized:false}}
 }
+
+function normalizeAssistantText(content:string):string{return content.replace(/[\"“”„‟＂]/g,'').trim()}
 
 export async function getPersonalization():Promise<{profile:PersonalizationProfile;memories:UserMemory[]}>{
  try{return{profile:await request<PersonalizationProfile>(await userPath('/personalization/profile')),memories:await request<UserMemory[]>(await userPath('/personalization/memories'))}}
