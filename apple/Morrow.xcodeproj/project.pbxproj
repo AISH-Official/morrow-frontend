@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A79D2E8E6E24F0EBA4F1001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A79D2E8E6E24F0EBA4F2001 /* Assets.xcassets */; };
+		0A79D2E8E6E24F0EBA4F1002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A79D2E8E6E24F0EBA4F2002 /* Assets.xcassets */; };
 		0549138E7B38003EE12D9FBF /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3769A75E037FA39D68BBDCA /* Theme.swift */; };
 		24E3489C068A4BA1E357757D /* BaselineAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0044DB75C021CE13B0DBD063 /* BaselineAnalyzer.swift */; };
 		3B4D7C2905A0FA4F8520EE95 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EF7E1FCA991BDCC07A230829 /* PrivacyInfo.xcprivacy */; };
@@ -77,6 +79,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0A79D2E8E6E24F0EBA4F2001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0A79D2E8E6E24F0EBA4F2002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0044DB75C021CE13B0DBD063 /* BaselineAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaselineAnalyzer.swift; sourceTree = "<group>"; };
 		133F16000C82A1603B765937 /* WellnessModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WellnessModels.swift; sourceTree = "<group>"; };
 		17C4BBF3577543FFD71284ED /* MorrowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorrowApp.swift; sourceTree = "<group>"; };
@@ -156,6 +160,7 @@
 		3E5D8075BCB6A5D19EE799F8 /* MorrowWatch */ = {
 			isa = PBXGroup;
 			children = (
+				0A79D2E8E6E24F0EBA4F2002 /* Assets.xcassets */,
 				B988E211B038A4A8A2CB973E /* Resources */,
 			);
 			path = MorrowWatch;
@@ -248,6 +253,7 @@
 		CE38820A507058B059D7CF07 /* Morrow */ = {
 			isa = PBXGroup;
 			children = (
+				0A79D2E8E6E24F0EBA4F2001 /* Assets.xcassets */,
 				9C86598E7A2E4F3BDADB4903 /* Resources */,
 			);
 			path = Morrow;
@@ -384,6 +390,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0A79D2E8E6E24F0EBA4F1001 /* Assets.xcassets in Resources */,
 				BE4A0C16EFB70CA3B23F742E /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -392,6 +399,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0A79D2E8E6E24F0EBA4F1002 /* Assets.xcassets in Resources */,
 				3B4D7C2905A0FA4F8520EE95 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
