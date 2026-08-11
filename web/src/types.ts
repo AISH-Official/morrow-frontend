@@ -14,6 +14,10 @@ export type Recommendation={id:string;title:string;rationale:string};
 export type Dashboard={
  wellnessLoad:string;
  score:number;
+ hasHealthData:boolean;
+ scoreConfidence:'NONE'|'CHECKIN_ONLY'|'LOW'|'MEDIUM'|'HIGH';
+ scoreReasons:string[];
+ lastUpdatedAt:string|null;
  metrics:{sleepMinutes:number;restingHeartRate:number;hrv:number;steps:number;activeEnergyKcal:number;exerciseMinutes:number};
  timeline:TimelineItem[];
  recommendation:Recommendation|null;
@@ -25,6 +29,8 @@ export type WeeklyReport={
  topStatus:string|null;
  topCause:string|null;
  improvementRate:number;
+ changeFromPrevious:number;
+ dailyScores:{date:string;score:number|null;checkInCount:number}[];
  patterns:string[];
  insights:string;
 };

@@ -10,6 +10,8 @@ final class HealthStore: ObservableObject {
     @Published private(set) var lastUpdated: Date?
     private let store = HKHealthStore()
     private let isStoreScreenshotMode: Bool
+    private var observerQueries: [HKObserverQuery] = []
+    private var backgroundConfigured = false
 
     init() {
         isStoreScreenshotMode = ProcessInfo.processInfo.environment["MORROW_STORE_SCREENSHOTS"] == "1"
@@ -54,6 +56,7 @@ final class HealthStore: ObservableObject {
         do {
             try await store.requestAuthorization(toShare: [], read: Set(quantityTypes + [sleep]))
             snapshot = try await loadSnapshot(sleepType: sleep)
+            configureBackgroundDelivery(types: quantityTypes + [sleep])
             lastUpdated = .now
             authorizationMessage = snapshot.hasHealthData ? "허용된 데이터만 기기에서 분석합니다." : "표시할 HealthKit 기록이 아직 없습니다."
         } catch {
@@ -63,6 +66,22 @@ final class HealthStore: ObservableObject {
 
     func refresh() async {
         await requestAuthorizationAndLoad()
+    }
+
+    private func configureBackgroundDelivery(types: [HKSampleType]) {
+        guard !backgroundConfigured else { return }
+        backgroundConfigured = true
+        for type in types {
+            store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
+                Task { @MainActor in
+                    await self?.refresh()
+                    completion()
+                }
+            }
+            observerQueries.append(query)
+            store.execute(query)
+        }
     }
 
     private func loadSnapshot(sleepType: HKCategoryType) async throws -> HealthSnapshot {

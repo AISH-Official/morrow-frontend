@@ -26,9 +26,11 @@ struct WatchCheckInView: View {
     @EnvironmentObject private var session: WatchSessionManager
     @EnvironmentObject private var health: WatchHealthStore
     @EnvironmentObject private var notifications: WatchNotificationManager
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var notificationPath: [String] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $notificationPath) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     brandHeader
@@ -43,6 +45,10 @@ struct WatchCheckInView: View {
             }
             .containerBackground(.black, for: .navigation)
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: String.self) { route in
+                if route == "BREATH" { RecoverySessionView(autoStart: true) }
+                else { QuickCheckInView() }
+            }
         }
         .tint(WatchTheme.accent)
         .task {
@@ -50,6 +56,15 @@ struct WatchCheckInView: View {
             session.sendHealthSummary(health.snapshot)
             await notifications.configure()
         }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { openPendingNotificationAction() } }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("morrow.watch.action"))) { _ in openPendingNotificationAction() }
+        .onAppear { openPendingNotificationAction() }
+    }
+
+    private func openPendingNotificationAction() {
+        guard let action = UserDefaults.standard.string(forKey: "morrow.watch.pendingAction") else { return }
+        UserDefaults.standard.removeObject(forKey: "morrow.watch.pendingAction")
+        notificationPath = [action]
     }
 
     private var brandHeader: some View {
@@ -282,6 +297,7 @@ private struct QuickCheckInView: View {
 }
 
 private struct RecoverySessionView: View {
+    var autoStart = false
     @State private var remaining = 60
     @State private var running = false
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -305,6 +321,7 @@ private struct RecoverySessionView: View {
             if remaining == 0 { running = false; WKInterfaceDevice.current().play(.success) }
             else if remaining % 4 == 0 { WKInterfaceDevice.current().play(.directionUp) }
         }
+        .onAppear { if autoStart { running = true } }
         .navigationTitle("1분 회복")
     }
 

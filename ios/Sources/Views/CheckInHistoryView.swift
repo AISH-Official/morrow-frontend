@@ -25,7 +25,7 @@ struct CheckInHistoryView: View {
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                     }
-                                    Text(record.source == .watch ? "Watch" : "iPhone")
+                                    Text(record.source == .watch ? "Watch" : record.source == .web ? "Web" : "iPhone")
                                         .font(.caption2.weight(.medium))
                                         .foregroundStyle(.secondary)
                                 }
@@ -49,7 +49,17 @@ struct CheckInHistoryView: View {
     }
 
     private func delete(at offsets: IndexSet) {
-        for offset in offsets { modelContext.delete(records[offset]) }
-        try? modelContext.save()
+        let targets = offsets.map { records[$0] }
+        Task { @MainActor in
+            for record in targets {
+                do {
+                    if let serverId = record.serverId { try await MorrowAPIClient.shared.deleteCheckIn(serverId) }
+                    modelContext.delete(record)
+                } catch {
+                    continue
+                }
+            }
+            try? modelContext.save()
+        }
     }
 }

@@ -3,16 +3,16 @@ import Combine
 import WatchConnectivity
 
 struct WatchWellnessContext {
-    var score = 78
-    var summary = "리듬 회복이 필요해요"
-    var sleep = "6시간 45분"
-    var hrv = "38 ms"
-    var heart = "72 bpm"
-    var steps = "4,286"
-    var energy = "318 kcal"
-    var exercise = "24분"
-    var respiratory = "15.2회/분"
-    var recommendation = "7분 동안 가볍게 걸어보세요"
+    var score = 0
+    var summary = "iPhone 데이터를 기다리는 중"
+    var sleep = "--"
+    var hrv = "--"
+    var heart = "--"
+    var steps = "--"
+    var energy = "--"
+    var exercise = "--"
+    var respiratory = "--"
+    var recommendation = "상태를 기록하면 맞춤 행동을 제안해요"
     var updatedAt = Date()
 }
 
@@ -44,12 +44,14 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     func send(status: String, cause: String) {
         let now = Date()
+        let eventId = UUID()
         recentCheckIn = WatchRecentCheckIn(status: status, cause: cause, recordedAt: now)
         UserDefaults.standard.set(status, forKey: "morrow.last.status")
         UserDefaults.standard.set(cause, forKey: "morrow.last.cause")
         UserDefaults.standard.set(now, forKey: "morrow.last.date")
         guard WCSession.default.activationState == .activated else { return }
         WCSession.default.transferUserInfo([
+            "eventId": eventId.uuidString,
             "status": status,
             "cause": cause,
             "recordedAt": ISO8601DateFormatter().string(from: now)

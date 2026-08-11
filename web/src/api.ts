@@ -1,12 +1,13 @@
 import type{AssistantResult,CheckInInput,Dashboard,PersonalizationProfile,TimelineKind,UserMemory,WeeklyReport}from'./types';
 
 const API_ROOT=import.meta.env.VITE_API_BASE_URL||'/api/v1';
-const REQUEST_TIMEOUT=5000;
+const REQUEST_TIMEOUT=30000;
 const SESSION_KEY='morrow.web.session.v2';
 const LEGACY_SESSION_KEY='morrow.web.session.v1';
 const INSTALLATION_KEY='morrow.web.installation.v1';
 
 export type WebSession={userId:string;accessToken:string;pairingCode:string;deviceId:string;platform:string};
+export type ConnectedDevice={id:string;deviceId:string;deviceName:string;platform:'IOS'|'WATCHOS'|'WEB';lastSeenAt:string};
 
 export class SessionExpiredError extends Error{
  constructor(){super('로그인이 만료되었습니다.');this.name='SessionExpiredError'}
@@ -96,7 +97,7 @@ function normalizeKind(value:string):TimelineKind{
 }
 
 function normalizeDashboard(value:Dashboard):Dashboard{
- return{...value,timeline:(value.timeline??[]).map(item=>({...item,kind:normalizeKind(item.kind)})),recommendation:value.recommendation??null};
+ return{...value,hasHealthData:value.hasHealthData??Object.values(value.metrics??{}).some(item=>Number(item)>0),scoreConfidence:value.scoreConfidence??'LOW',scoreReasons:value.scoreReasons??[],lastUpdatedAt:value.lastUpdatedAt??null,timeline:(value.timeline??[]).map(item=>({...item,kind:normalizeKind(item.kind)})),recommendation:value.recommendation??null};
 }
 
 export async function getDashboard():Promise<Dashboard>{return normalizeDashboard(await request<Dashboard>(await userPath('/dashboard')))}
@@ -110,10 +111,24 @@ export async function sendAssistantMessage(content:string):Promise<AssistantResu
  }catch(error){if(isSessionExpired(error))throw error;return{content:localAssistantResponse(content),aiMode:'LOCAL',personalizationEvidenceCount:0,personalized:false}}
 }
 
+export async function clearAssistantConversation():Promise<void>{await request(await userPath('/assistant/messages'),{method:'DELETE'})}
+
 function normalizeAssistantText(content:string):string{return content.replace(/[\"“”„‟＂]/g,'').trim()}
 
 export async function getPersonalization():Promise<{profile:PersonalizationProfile;memories:UserMemory[]}>{
  return{profile:await request<PersonalizationProfile>(await userPath('/personalization/profile')),memories:await request<UserMemory[]>(await userPath('/personalization/memories'))};
+}
+
+export async function getConnectedDevices():Promise<ConnectedDevice[]>{return request<ConnectedDevice[]>('/auth/devices')}
+export async function revokeConnectedDevice(id:string):Promise<void>{await request(`/auth/devices/${id}`,{method:'DELETE'})}
+export async function getAiHealthConsent():Promise<boolean>{return(await request<{consent:boolean}>('/privacy/ai-health-consent')).consent}
+export async function setAiHealthConsent(consent:boolean):Promise<boolean>{return(await request<{consent:boolean}>('/privacy/ai-health-consent',{method:'PATCH',body:JSON.stringify({consent})})).consent}
+export async function exportAccountData():Promise<unknown>{
+ const[dashboard,weekly,personalization,devices,consent,checkIns,messages]=await Promise.all([
+  getDashboard(),getWeeklyReport(),getPersonalization(),getConnectedDevices(),getAiHealthConsent(),
+  request<unknown[]>(await userPath('/check-ins')),request<unknown[]>(await userPath('/assistant/messages'))
+ ]);
+ return{exportedAt:new Date().toISOString(),dashboard,weekly,personalization,devices,aiHealthConsent:consent,checkIns,messages};
 }
 
 export async function rebuildPersonalization():Promise<PersonalizationProfile>{return request<PersonalizationProfile>(await userPath('/personalization/rebuild'),{method:'POST'})}
@@ -133,6 +148,7 @@ export async function submitRecommendationFeedback(id:string,helpful:boolean):Pr
 export async function clearWellnessData():Promise<void>{
  await request(await userPath('/users/me/data'),{method:'DELETE'});
 }
+export async function deleteAccountCompletely():Promise<void>{await request(await userPath('/users/me/account'),{method:'DELETE'})}
 
 function localAssistantResponse(message:string):string{
  if(/죽|자해|사라지고|끝내고/.test(message))return'지금 혼자 버티지 않아도 괜찮아요. 즉시 위험하다면 119 또는 112에 연락하고, 자살예방상담전화 109에서 24시간 도움을 받을 수 있어요. 가능하면 지금 믿을 수 있는 사람에게도 곁에 있어 달라고 알려주세요.';

@@ -30,7 +30,11 @@ struct DashboardView: View {
                         MetricCard(title: "호흡수", value: health.snapshot.respiratoryText, icon: "lungs.fill", tint: .cyan)
                     }
 
-                    RecommendationCard(title: "7분 동안 가볍게 걸어보세요", rationale: "수면 회복이 낮은 날에는 강한 운동보다 짧은 움직임이 리듬을 되찾는 데 부담이 적어요.")
+                    if let recommendation = syncService.currentRecommendation {
+                        RecommendationCard(title: recommendation.title, rationale: recommendation.rationale)
+                    } else {
+                        RecommendationCard(title: "지금 상태를 기록해 보세요", rationale: "30초 체크인을 남기면 오늘의 흐름에 맞는 행동을 제안해 드려요.")
+                    }
 
                     NavigationLink(destination: AssistantView()) {
                         HStack(spacing: 13) {

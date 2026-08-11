@@ -24,6 +24,33 @@ struct NativeAssistantReply: Decodable {
 struct NativeDashboardSummary: Decodable {
     let score: Int
     let wellnessLoad: String
+    let hasHealthData: Bool
+    let scoreConfidence: String
+    let scoreReasons: [String]
+    let lastUpdatedAt: String?
+    let recommendation: NativeRecommendation?
+}
+
+struct NativeRecommendation: Decodable {
+    let id: String
+    let title: String
+    let rationale: String
+}
+
+struct NativeServerCheckIn: Decodable {
+    let id: UUID
+    let clientEventId: String?
+    let status: String
+    let cause: String?
+    let note: String
+    let source: String
+    let recordedAt: String
+
+    var date: Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: recordedAt) ?? ISO8601DateFormatter().date(from: recordedAt) ?? .now
+    }
 }
 
 struct AIProactiveInsight: Decodable {
@@ -33,6 +60,8 @@ struct AIProactiveInsight: Decodable {
     let aiMode: String
     let reason: String
 }
+
+private struct AIHealthConsentResponse: Decodable { let consent: Bool }
 
 enum MorrowRuntimeConfiguration {
     static let overrideKey = "morrow.api.baseURL.override"
@@ -83,31 +112,31 @@ actor MorrowAPIClient {
         return value
     }
 
-    func logout() {
+    func logout() async {
         let credentials = cachedCredentials ?? DeviceCredentialStore.load()
-        cachedCredentials = nil
-        DeviceCredentialStore.clear()
-        guard let credentials, let root = MorrowRuntimeConfiguration.apiRoot else { return }
+        guard let credentials, let root = MorrowRuntimeConfiguration.apiRoot else { cachedCredentials = nil; DeviceCredentialStore.clear(); return }
+        if let token = UserDefaults.standard.string(forKey: "morrow.push.token"),
+           var components = URLComponents(url: root.appending(path: "notifications/devices"), resolvingAgainstBaseURL: false) {
+            components.queryItems = [URLQueryItem(name: "userId", value: credentials.userId), URLQueryItem(name: "deviceToken", value: token)]
+            if let url = components.url {
+                var unregister = URLRequest(url: url); unregister.httpMethod = "DELETE"; unregister.timeoutInterval = 5
+                unregister.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+                _ = try? await URLSession.shared.data(for: unregister)
+            }
+        }
         var request = URLRequest(url: root.appending(path: "auth/logout"))
         request.httpMethod = "POST"
         request.timeoutInterval = 5
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        Task { _ = try? await URLSession.shared.data(for: request) }
+        _ = try? await URLSession.shared.data(for: request)
+        cachedCredentials = nil
+        DeviceCredentialStore.clear()
     }
 
     func credentials() async throws -> MorrowCredentials {
         if let cachedCredentials { return cachedCredentials }
         if let stored = DeviceCredentialStore.load() { cachedCredentials = stored; return stored }
-        guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
-        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? persistentInstallationId()
-        let configuredUser = Bundle.main.object(forInfoDictionaryKey: "MORROW_USER_ID") as? String
-        let payload = RegisterDeviceRequest(deviceId: "ios-\(deviceId)", deviceName: UIDevice.current.name, platform: "IOS", userId: configuredUser)
-        var request = URLRequest(url: root.appending(path: "auth/device"))
-        request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type"); request.httpBody = try encoder.encode(payload)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try validate(response)
-        let value = try decoder.decode(MorrowCredentials.self, from: data)
-        cachedCredentials = value; DeviceCredentialStore.save(value); return value
+        throw MorrowAuthenticationError.loginRequired
     }
 
     func send<T: Encodable>(_ value: T, path: String, method: String = "POST") async throws {
@@ -154,6 +183,40 @@ actor MorrowAPIClient {
         return try decoder.decode(NativeDashboardSummary.self, from: data)
     }
 
+    func checkIns() async throws -> [NativeServerCheckIn] {
+        try await getAndDecode(path: "check-ins")
+    }
+
+    func createCheckIn<T: Encodable>(_ value: T) async throws -> NativeServerCheckIn {
+        try await sendAndDecode(value, path: "check-ins")
+    }
+
+    func deleteCheckIn(_ id: UUID) async throws {
+        try await send(EmptyPayload(), path: "check-ins/\(id.uuidString)", method: "DELETE")
+    }
+
+    func clearWellnessData() async throws {
+        try await send(EmptyPayload(), path: "users/me/data", method: "DELETE")
+    }
+
+    func aiHealthConsent() async throws -> Bool {
+        let value: AIHealthConsentResponse = try await getAndDecode(path: "privacy/ai-health-consent")
+        return value.consent
+    }
+
+    func updateAIHealthConsent(_ consent: Bool) async throws -> Bool {
+        let credentials = try await credentials()
+        guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
+        var request = URLRequest(url: root.appending(path: "privacy/ai-health-consent"))
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try encoder.encode(AIHealthConsentRequest(consent: consent))
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        return try decoder.decode(AIHealthConsentResponse.self, from: data).consent
+    }
+
     func connectionContext() async throws -> (apiRoot: String, credentials: MorrowCredentials) {
         (MorrowRuntimeConfiguration.apiRootString, try await credentials())
     }
@@ -184,6 +247,28 @@ actor MorrowAPIClient {
         cachedCredentials = value
         DeviceCredentialStore.save(value)
         return value
+    }
+
+    func refreshPairingCode() async throws -> MorrowCredentials {
+        let current = try await credentials()
+        guard let root = MorrowRuntimeConfiguration.apiRoot,
+              var components = URLComponents(url: root.appending(path: "auth/pairing-code"), resolvingAgainstBaseURL: false) else { throw URLError(.badURL) }
+        components.queryItems = [URLQueryItem(name: "deviceId", value: currentDeviceId)]
+        guard let url = components.url else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(current.accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        let value = try decoder.decode(MorrowCredentials.self, from: data)
+        cachedCredentials = value
+        DeviceCredentialStore.save(value)
+        return value
+    }
+
+    private var currentDeviceId: String {
+        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? persistentInstallationId()
+        return "ios-\(deviceId)"
     }
 
     private var pushEnvironment: String {
@@ -238,19 +323,37 @@ actor MorrowAPIClient {
         return try decoder.decode(Response.self, from: data)
     }
 
+    private func getAndDecode<Response: Decodable>(path: String, canRefresh: Bool = true) async throws -> Response {
+        let credentials = try await credentials()
+        guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
+        var request = URLRequest(url: root.appending(path: path))
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if canRefresh, let http = response as? HTTPURLResponse, http.statusCode == 401 {
+            cachedCredentials = nil
+            DeviceCredentialStore.clear()
+            return try await getAndDecode(path: path, canRefresh: false)
+        }
+        try validate(response)
+        return try decoder.decode(Response.self, from: data)
+    }
+
     private func persistentInstallationId() -> String {
         let key = "morrow.installation.id"
         if let value = UserDefaults.standard.string(forKey: key) { return value }
         let value = UUID().uuidString; UserDefaults.standard.set(value, forKey: key); return value
     }
 
-    private struct RegisterDeviceRequest: Encodable { let deviceId, deviceName, platform: String; let userId: String? }
     private struct PairDeviceRequest: Encodable { let pairingCode, deviceId, deviceName, platform: String }
     private struct PushDeviceRequest: Encodable { let userId, deviceToken, platform, environment: String }
     private struct AssistantMessageRequest: Encodable { let userId, content: String }
     private struct ProactiveInsightRequest: Encodable { let userId: String }
     private struct AccountLoginRequest: Encodable { let accountId, deviceId, deviceName, platform: String }
+    private struct EmptyPayload: Encodable {}
+    private struct AIHealthConsentRequest: Encodable { let consent: Bool }
 }
+
+enum MorrowAuthenticationError: Error { case loginRequired }
 
 private enum DeviceCredentialStore {
     private static let service = "com.qlsl1198.morrowwellness.auth"

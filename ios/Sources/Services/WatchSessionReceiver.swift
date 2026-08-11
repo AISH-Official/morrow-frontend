@@ -3,6 +3,7 @@ import Combine
 import WatchConnectivity
 
 struct IncomingWatchCheckIn: Codable {
+    let eventId: UUID
     let status: String
     let cause: String?
     let recordedAt: Date
@@ -119,7 +120,8 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
         let cause = userInfo["cause"] as? String
         let date = (userInfo["recordedAt"] as? String).flatMap(ISO8601DateFormatter().date(from:)) ?? .now
         var inbox = (UserDefaults.standard.data(forKey: inboxKey)).flatMap { try? JSONDecoder().decode([IncomingWatchCheckIn].self, from: $0) } ?? []
-        inbox.append(IncomingWatchCheckIn(status: status, cause: cause, recordedAt: date))
+        let eventId = (userInfo["eventId"] as? String).flatMap(UUID.init(uuidString:)) ?? UUID()
+        inbox.append(IncomingWatchCheckIn(eventId: eventId, status: status, cause: cause, recordedAt: date))
         if let data = try? JSONEncoder().encode(inbox) { UserDefaults.standard.set(data, forKey: inboxKey) }
         DispatchQueue.main.async { self.inboxVersion += 1 }
     }

@@ -44,6 +44,7 @@ struct HealthSnapshot {
 enum CheckInSource: String, Codable, CaseIterable {
     case iPhone
     case watch
+    case web
 }
 
 @Model
@@ -54,14 +55,18 @@ final class CheckInRecord {
     var causeRaw: String?
     var sourceRaw: String
     var recordedAt: Date
+    var serverId: UUID?
+    var isSynced: Bool = false
 
-    init(status: WellnessStatus, cause: WellnessCause? = nil, note: String = "", source: CheckInSource = .iPhone, recordedAt: Date = .now) {
-        self.id = UUID()
+    init(id: UUID = UUID(), status: WellnessStatus, cause: WellnessCause? = nil, note: String = "", source: CheckInSource = .iPhone, recordedAt: Date = .now, serverId: UUID? = nil, isSynced: Bool = false) {
+        self.id = id
         self.statusRaw = status.rawValue
         self.note = note
         self.causeRaw = cause?.rawValue
         self.sourceRaw = source.rawValue
         self.recordedAt = recordedAt
+        self.serverId = serverId
+        self.isSynced = isSynced
     }
 
     var status: WellnessStatus { WellnessStatus(rawValue: statusRaw) ?? .ok }
@@ -85,6 +90,7 @@ enum WellnessStatus: String, CaseIterable, Codable, Identifiable {
     case tense = "긴장"
     case tired = "피로"
     case lowFocus = "집중 저하"
+    case uncomfortable = "불편함"
 
     var id: String { rawValue }
 
@@ -94,6 +100,7 @@ enum WellnessStatus: String, CaseIterable, Codable, Identifiable {
         case .tense: return "bolt.heart"
         case .tired: return "moon.zzz"
         case .lowFocus: return "cloud.fog"
+        case .uncomfortable: return "cross.case"
         }
     }
 
@@ -103,6 +110,7 @@ enum WellnessStatus: String, CaseIterable, Codable, Identifiable {
         case .tense: return .orange
         case .tired: return .indigo
         case .lowFocus: return .purple
+        case .uncomfortable: return .red
         }
     }
 
@@ -112,6 +120,7 @@ enum WellnessStatus: String, CaseIterable, Codable, Identifiable {
         case .tense: return "몸이나 마음이 긴장돼요"
         case .tired: return "쉬고 싶고 지쳐 있어요"
         case .lowFocus: return "집중이 잘 안 돼요"
+        case .uncomfortable: return "몸이 편하지 않아요"
         }
     }
 }

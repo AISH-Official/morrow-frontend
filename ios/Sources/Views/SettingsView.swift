@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var apiURL = MorrowRuntimeConfiguration.apiRootString
     @State private var pairingCode = "연결 중"
     @State private var connectionMessage = ""
+    @State private var aiHealthConsent = false
 
     var body: some View {
         Form {
@@ -42,6 +43,10 @@ struct SettingsView: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("데이터와 개인정보") {
+                Toggle("AI 답변에 건강 요약 사용", isOn: $aiHealthConsent)
+                    .onChange(of: aiHealthConsent) { _, value in Task { _ = try? await MorrowAPIClient.shared.updateAIHealthConsent(value) } }
+                Text("직접 허용한 경우에만 파생 건강 요약을 AI 답변 컨텍스트에 포함합니다.")
+                    .font(.footnote).foregroundStyle(.secondary)
                 Label("HealthKit 원본은 기기에서만 읽고 분석합니다.", systemImage: "lock.shield")
                 Label("건강 데이터와 체크인 기록을 광고나 판매에 사용하지 않습니다.", systemImage: "hand.raised")
                 NavigationLink("개인정보 처리방침", destination: PrivacyPolicyView())
@@ -74,7 +79,7 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.screenBackground)
         .confirmationDialog("모든 체크인 기록을 삭제할까요?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-            Button("전체 삭제", role: .destructive, action: deleteAll)
+            Button("모든 기기와 서버에서 삭제", role: .destructive) { Task { await deleteAll() } }
             Button("취소", role: .cancel) {}
         } message: {
             Text("삭제된 기록은 복구할 수 없습니다. HealthKit 원본 데이터는 삭제하지 않습니다.")
@@ -92,7 +97,10 @@ struct SettingsView: View {
         .task { await loadConnection() }
     }
 
-    private func deleteAll() {
+    @MainActor
+    private func deleteAll() async {
+        do { try await MorrowAPIClient.shared.clearWellnessData() }
+        catch { connectionMessage = "서버 기록을 삭제하지 못했습니다. 연결을 확인해 주세요."; return }
         let records = (try? modelContext.fetch(FetchDescriptor<CheckInRecord>())) ?? []
         for record in records {
             modelContext.delete(record)
@@ -113,9 +121,10 @@ struct SettingsView: View {
     private func loadConnection() async {
         apiURL = MorrowRuntimeConfiguration.apiRootString
         do {
-            let credentials = try await MorrowAPIClient.shared.credentials()
+            let credentials = try await MorrowAPIClient.shared.refreshPairingCode()
+            aiHealthConsent = (try? await MorrowAPIClient.shared.aiHealthConsent()) ?? false
             pairingCode = credentials.pairingCode
-            connectionMessage = "사용자 \(credentials.userId)로 iPhone·Watch·웹을 연결합니다."
+            connectionMessage = "사용자 \(credentials.userId) 연결 코드 · 10분 동안 유효"
         } catch {
             pairingCode = "연결 실패"
             connectionMessage = "Mac의 LAN 주소를 포함한 API 주소를 입력하세요. 예: http://192.168.0.10:8080/api/v1"

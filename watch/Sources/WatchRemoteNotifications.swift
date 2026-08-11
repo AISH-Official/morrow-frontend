@@ -12,6 +12,10 @@ struct WatchServerConnection: Codable {
 final class MorrowWatchExtensionDelegate: NSObject, WKExtensionDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching() {
         UNUserNotificationCenter.current().delegate = self
+        let breathe = UNNotificationAction(identifier: "START_BREATHING", title: "1분 호흡 시작", options: [.foreground])
+        let checkIn = UNNotificationAction(identifier: "OPEN_CHECKIN", title: "지금 기록", options: [.foreground])
+        let category = UNNotificationCategory(identifier: "MORROW_ACTION", actions: [breathe, checkIn], intentIdentifiers: [])
+        UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
     func didRegisterForRemoteNotifications(withDeviceToken deviceToken: Data) {
@@ -26,6 +30,12 @@ final class MorrowWatchExtensionDelegate: NSObject, WKExtensionDelegate, UNUserN
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .sound]
     }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        if response.actionIdentifier == "START_BREATHING" { UserDefaults.standard.set("BREATH", forKey: "morrow.watch.pendingAction") }
+        else if response.actionIdentifier == "OPEN_CHECKIN" { UserDefaults.standard.set("CHECKIN", forKey: "morrow.watch.pendingAction") }
+        await MainActor.run { NotificationCenter.default.post(name: Notification.Name("morrow.watch.action"), object: nil) }
+    }
 }
 
 actor WatchPushRegistrar {
@@ -39,7 +49,16 @@ actor WatchPushRegistrar {
         await registerIfReady()
     }
 
-    func clearConnection() {
+    func clearConnection() async {
+        if let connection, let token, let root = URL(string: connection.apiRoot),
+           var components = URLComponents(url: root.appending(path: "notifications/devices"), resolvingAgainstBaseURL: false) {
+            components.queryItems = [URLQueryItem(name: "userId", value: connection.userId), URLQueryItem(name: "deviceToken", value: token)]
+            if let url = components.url {
+                var request = URLRequest(url: url); request.httpMethod = "DELETE"
+                request.setValue("Bearer \(connection.accessToken)", forHTTPHeaderField: "Authorization")
+                _ = try? await URLSession.shared.data(for: request)
+            }
+        }
         connection = nil
         WatchConnectionStore.clear()
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
