@@ -34,7 +34,7 @@ private struct RootView: View {
                     ProgressView("계정 연결 확인 중").tint(Theme.accent).foregroundStyle(Theme.textSecondary)
                 }
             case .signedOut:
-                DemoLoginView { sessionState = .authenticated }
+                AccountAccessView { sessionState = .authenticated }
             case .authenticated:
                 AuthenticatedRootView { sessionState = .signedOut }
             }
@@ -46,8 +46,11 @@ private struct RootView: View {
     }
 }
 
-private struct DemoLoginView: View {
+private struct AccountAccessView: View {
+    @State private var isSignup = false
     @State private var accountId = ""
+    @State private var password = ""
+    @State private var passwordConfirmation = ""
     @State private var isLoggingIn = false
     @State private var errorMessage = ""
     let onSuccess: () -> Void
@@ -59,23 +62,41 @@ private struct DemoLoginView: View {
                 Spacer()
                 VStack(alignment: .leading, spacing: 7) {
                     Text("MORROW").font(.system(size: 25, weight: .bold, design: .monospaced)).tracking(5).foregroundStyle(Theme.textPrimary)
-                    Text("ACCOUNT LOGIN").morrowKicker()
+                    Text(isSignup ? "CREATE ACCOUNT" : "ACCOUNT LOGIN").morrowKicker()
                 }
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("아이디로 시작하기", systemImage: "person.crop.circle.badge.checkmark")
+                    Picker("계정", selection: $isSignup) {
+                        Text("로그인").tag(false)
+                        Text("회원가입").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: isSignup) { _, _ in
+                        password = ""
+                        passwordConfirmation = ""
+                        errorMessage = ""
+                    }
+                    Label(isSignup ? "나만의 계정 만들기" : "내 계정으로 연결하기", systemImage: "person.crop.circle.badge.checkmark")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(Theme.textPrimary)
                     TextField("아이디", text: $accountId)
                         .textContentType(.username)
                         .textInputAutocapitalization(.never)
                         .loginField()
+                    SecureField("비밀번호 8자 이상", text: $password)
+                        .textContentType(isSignup ? .newPassword : .password)
+                        .loginField()
+                    if isSignup {
+                        SecureField("비밀번호 확인", text: $passwordConfirmation)
+                            .textContentType(.newPassword)
+                            .loginField()
+                    }
                     if !errorMessage.isEmpty {
                         Text(errorMessage).font(.caption).foregroundStyle(.red)
                     }
-                    Button { Task { await login() } } label: {
+                    Button { Task { await submit() } } label: {
                         HStack {
                             if isLoggingIn { ProgressView().tint(Theme.screenBackground) }
-                            Text(isLoggingIn ? "로그인 중" : "로그인")
+                            Text(isLoggingIn ? "계정 확인 중" : isSignup ? "계정 만들기" : "로그인")
                             Spacer()
                             Image(systemName: "arrow.right")
                         }
@@ -85,11 +106,11 @@ private struct DemoLoginView: View {
                         .frame(height: 52)
                         .background(LinearGradient(colors: [Theme.accent, Theme.mint], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 14))
                     }
-                    .disabled(isLoggingIn || accountId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isLoggingIn || accountId.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 || password.count < 8 || (isSignup && passwordConfirmation.count < 8))
                 }
                 .padding(18)
                 .morrowPanel(cornerRadius: 20)
-                Text("처음에는 아이디만 입력합니다. 웹 연결 코드는 로그인 후 설정에서 한 번만 연결하세요.")
+                Text(isSignup ? "새 계정의 건강 기록은 다른 사용자와 분리됩니다. 기존 테스트 계정은 그대로 유지됩니다." : "기존 테스트 계정을 포함해 가입한 계정으로 로그인할 수 있습니다.")
                     .font(.caption)
                     .foregroundStyle(Theme.textMuted)
                 Spacer()
@@ -100,15 +121,24 @@ private struct DemoLoginView: View {
     }
 
     @MainActor
-    private func login() async {
+    private func submit() async {
         isLoggingIn = true
         errorMessage = ""
         defer { isLoggingIn = false }
+        if isSignup && password != passwordConfirmation {
+            errorMessage = "비밀번호 확인이 일치하지 않습니다."
+            return
+        }
         do {
-            _ = try await MorrowAPIClient.shared.login(accountId: accountId.trimmingCharacters(in: .whitespacesAndNewlines))
+            let cleanAccountId = accountId.trimmingCharacters(in: .whitespacesAndNewlines)
+            if isSignup {
+                _ = try await MorrowAPIClient.shared.signup(accountId: cleanAccountId, password: password)
+            } else {
+                _ = try await MorrowAPIClient.shared.login(accountId: cleanAccountId, password: password)
+            }
             onSuccess()
         } catch {
-            errorMessage = "아이디를 확인하거나 잠시 후 다시 시도해 주세요."
+            errorMessage = isSignup ? "이미 사용 중인 아이디인지 확인해 주세요." : "아이디 또는 비밀번호를 확인해 주세요."
         }
     }
 }
