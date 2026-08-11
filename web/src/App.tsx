@@ -21,10 +21,10 @@ const welcomeChats:Chat[]=[
  {id:2,role:'ai',text:'오늘의 건강 흐름과 지금 느끼는 상태를 함께 살펴볼게요.'}
 ];
 const CACHE_PREFIX='morrow.web.state.v1:';
-type CachedWebState={dashboard?:Dashboard;report?:WeeklyReport;personalization?:PersonalizationProfile;memories?:UserMemory[];chats?:Chat[];view?:ViewKey;aiMode?:'LIVE'|'FALLBACK'|'LOCAL'|'UNKNOWN';updatedAt?:string};
+type CachedWebState={dashboard?:Dashboard;report?:WeeklyReport;personalization?:PersonalizationProfile;memories?:UserMemory[];view?:ViewKey;aiMode?:'LIVE'|'FALLBACK'|'LOCAL'|'UNKNOWN';updatedAt?:string};
 
 function readCachedState(userId:string):CachedWebState|null{
- try{const value=window.localStorage.getItem(`${CACHE_PREFIX}${userId}`);return value?JSON.parse(value) as CachedWebState:null}catch{return null}
+ try{const value=window.localStorage.getItem(`${CACHE_PREFIX}${userId}`);if(!value)return null;const parsed=JSON.parse(value) as CachedWebState&{chats?:unknown};delete parsed.chats;return parsed}catch{return null}
 }
 function updateCachedState(userId:string,patch:Partial<CachedWebState>){
  const current=readCachedState(userId)??{};
@@ -43,7 +43,7 @@ export default function App(){
  const[message,setMessage]=useState('');
  const[phase,setPhase]=useState<Phase>('idle');
  const[sound,setSound]=useState(false);
- const[chats,setChats]=useState<Chat[]>(bootCache?.chats?.length?bootCache.chats:welcomeChats);
+ const[chats,setChats]=useState<Chat[]>(welcomeChats);
  const[checkInOpen,setCheckInOpen]=useState(false);
  const[toast,setToast]=useState('');
  const[feedbackDone,setFeedbackDone]=useState(false);
@@ -56,12 +56,12 @@ export default function App(){
  const[loginMessage,setLoginMessage]=useState(bootSession?'':'데이터를 안전하게 불러오려면 로그인해 주세요.');
  const[loadError,setLoadError]=useState('');
  const recognition=useRef<RecognitionLike|null>(null);
- const nextId=useRef(Math.max(2,...(bootCache?.chats??[]).map(chat=>chat.id))+1);
+ const nextId=useRef(3);
  const particles=useMemo(()=>Array.from({length:34},(_,index)=>({left:`${(index*47)%100}%`,top:`${(index*71)%100}%`,delay:`-${(index%13)*.37}s`,size:1+(index%3)})),[]);
 
  useEffect(()=>{if(bootSession)void loadData();return()=>{recognition.current?.stop();window.speechSynthesis?.cancel()}},[]);
  useEffect(()=>{if(!toast)return;const timer=window.setTimeout(()=>setToast(''),2800);return()=>window.clearTimeout(timer)},[toast]);
- useEffect(()=>{if(account)updateCachedState(account.userId,{dashboard:dashboard??undefined,report:report??undefined,personalization:personalization??undefined,memories,chats,view,aiMode})},[account,dashboard,report,personalization,memories,chats,view,aiMode]);
+ useEffect(()=>{if(account)updateCachedState(account.userId,{dashboard:dashboard??undefined,report:report??undefined,personalization:personalization??undefined,memories,view,aiMode})},[account,dashboard,report,personalization,memories,view,aiMode]);
 
  async function loadData(showSpinner=false){
   if(showSpinner)setRefreshing(true);
@@ -84,7 +84,7 @@ export default function App(){
 
  function hydrateAccount(value:WebSession){
   const cached=readCachedState(value.userId);
-  setDashboard(cached?.dashboard??null);setReport(cached?.report??null);setPersonalization(cached?.personalization??null);setMemories(cached?.memories??[]);setChats(cached?.chats?.length?cached.chats:welcomeChats);setView(cached?.view??'today');setAiMode(cached?.aiMode??'UNKNOWN');setMode(cached?'offline':'live');setLoadError('');
+  setDashboard(cached?.dashboard??null);setReport(cached?.report??null);setPersonalization(cached?.personalization??null);setMemories(cached?.memories??[]);setChats(welcomeChats);setView(cached?.view??'today');setAiMode(cached?.aiMode??'UNKNOWN');setMode(cached?'offline':'live');setLoadError('');
  }
 
  function speak(text:string){
