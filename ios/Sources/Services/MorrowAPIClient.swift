@@ -113,16 +113,25 @@ actor MorrowAPIClient {
         cachedCredentials != nil || DeviceCredentialStore.load() != nil
     }
 
-    func login(accountId: String) async throws -> MorrowCredentials {
+    func login(accountId: String, password: String) async throws -> MorrowCredentials {
+        try await authenticate(accountId: accountId, password: password, path: "auth/account-login")
+    }
+
+    func signup(accountId: String, password: String) async throws -> MorrowCredentials {
+        try await authenticate(accountId: accountId, password: password, path: "auth/signup")
+    }
+
+    private func authenticate(accountId: String, password: String, path: String) async throws -> MorrowCredentials {
         guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? persistentInstallationId()
-        let payload = AccountLoginRequest(
+        let payload = PasswordAccountRequest(
             accountId: accountId,
+            password: password,
             deviceId: "ios-\(deviceId)",
             deviceName: UIDevice.current.name,
             platform: "IOS"
         )
-        var request = URLRequest(url: root.appending(path: "auth/account"))
+        var request = URLRequest(url: root.appending(path: path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(payload)
@@ -393,7 +402,7 @@ actor MorrowAPIClient {
     private struct PushDeviceRequest: Encodable { let userId, deviceToken, platform, environment: String }
     private struct AssistantMessageRequest: Encodable { let userId, content: String }
     private struct ProactiveInsightRequest: Encodable { let userId: String }
-    private struct AccountLoginRequest: Encodable { let accountId, deviceId, deviceName, platform: String }
+    private struct PasswordAccountRequest: Encodable { let accountId, password, deviceId, deviceName, platform: String }
     private struct EmptyPayload: Encodable {}
     private struct AIHealthConsentRequest: Encodable { let consent: Bool }
     private struct RecoveryCreateRequest: Encodable { let action, triggerType, reason, confidence, source: String }

@@ -67,8 +67,15 @@ export async function pairWebSession(pairingCode:string):Promise<WebSession>{
  return saveSession(value);
 }
 
-export async function loginWebSession(accountId:string):Promise<WebSession>{
- const value=await rawRequest<WebSession>('/auth/account',{method:'POST',body:JSON.stringify({accountId,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})},false);
+function webAccountPayload(accountId:string,password:string){return{accountId,password,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'}}
+
+export async function loginWebSession(accountId:string,password:string):Promise<WebSession>{
+ const value=await rawRequest<WebSession>('/auth/account-login',{method:'POST',body:JSON.stringify(webAccountPayload(accountId,password))},false);
+ return saveSession(value);
+}
+
+export async function signupWebSession(accountId:string,password:string):Promise<WebSession>{
+ const value=await rawRequest<WebSession>('/auth/signup',{method:'POST',body:JSON.stringify(webAccountPayload(accountId,password))},false);
  return saveSession(value);
 }
 
