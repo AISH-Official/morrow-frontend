@@ -425,7 +425,7 @@ final class PhoneNotificationManager: ObservableObject {
 
     private func scheduleWeekly(identifier: String, weekday: Int, hour: Int, minute: Int, title: String, body: String) async {
         let content = UNMutableNotificationContent(); content.title = title; content.body = body; content.sound = .default; content.categoryIdentifier = "MORROW_ACTION"
-        let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(weekday: weekday, hour: hour, minute: minute), repeats: true)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute, weekday: weekday), repeats: true)
         try? await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
     }
 }
