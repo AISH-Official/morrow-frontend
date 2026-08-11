@@ -56,6 +56,7 @@ export default function App(){
  const[memories,setMemories]=useState<UserMemory[]>(bootCache?.memories??[]);
  const[devices,setDevices]=useState<ConnectedDevice[]>([]);
  const[aiHealthConsent,setAIHealthConsent]=useState(false);
+ const[aiHealthConsentSaving,setAIHealthConsentSaving]=useState(false);
  const[aiMode,setAiMode]=useState<'LIVE'|'FALLBACK'|'LOCAL'|'UNKNOWN'>(bootCache?.aiMode??'UNKNOWN');
  const[account,setAccount]=useState<WebSession|null>(bootSession);
  const[loginRequired,setLoginRequired]=useState(bootSession===null);
@@ -129,7 +130,7 @@ export default function App(){
   try{await clearAssistantConversation();setChats([{id:nextId.current++,role:'ai',text:'이전 대화 기억을 삭제했어요. 새롭게 이야기해 주세요.'}]);setToast('AI의 이전 대화 기억을 삭제했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('대화 기억을 삭제하지 못했습니다. 다시 시도해 주세요.')}
  }
  async function revokeDevice(id:string){try{await revokeConnectedDevice(id);setDevices(await getConnectedDevices());setToast('선택한 기기의 연결을 해제했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('기기 연결을 해제하지 못했습니다.')}}
- async function changeAIHealthConsent(value:boolean){try{setAIHealthConsent(await setAiHealthConsent(value));setToast(value?'AI 건강 데이터 사용을 허용했어요.':'AI 답변에서 건강 데이터 사용을 중지했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('AI 데이터 설정을 바꾸지 못했습니다.')}}
+ async function changeAIHealthConsent(value:boolean){if(aiHealthConsentSaving)return;setAIHealthConsentSaving(true);try{setAIHealthConsent(await setAiHealthConsent(value));setToast(value?'AI 건강 데이터 사용을 허용했어요.':'AI 답변에서 건강 데이터 사용을 중지했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('AI 데이터 설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')}finally{setAIHealthConsentSaving(false)}}
 
  async function saveCheckIn(input:CheckInInput){
   try{await createCheckIn(input);await loadData();setCheckInOpen(false);setFeedbackDone(false);setToast('체크인이 저장되어 모든 기기 흐름에 반영됐어요.')}
@@ -189,7 +190,7 @@ export default function App(){
    {dashboard&&view==='timeline'&&<TimelineView items={dashboard.timeline} onCheckIn={()=>setCheckInOpen(true)}/>}
    {report&&view==='report'&&<ReportView report={report}/>}
    {view==='data'&&<DataView mode={mode} profile={personalization} memories={memories} onRebuild={()=>void rebuildLearning()} onAdd={addMemory} onExport={()=>void downloadData()} onForget={()=>void forgetConversation()} onDelete={()=>void deleteData()}/>}
-   {view==='settings'&&<SettingsView account={account} devices={devices} aiHealthConsent={aiHealthConsent} onAIHealthConsent={value=>void changeAIHealthConsent(value)} onPair={pairAccount} onRevoke={id=>void revokeDevice(id)} onDeleteAccount={()=>void deleteAccount()} onLogout={()=>void logout()}/>}
+   {view==='settings'&&<SettingsView account={account} devices={devices} aiHealthConsent={aiHealthConsent} aiHealthConsentSaving={aiHealthConsentSaving} onAIHealthConsent={value=>void changeAIHealthConsent(value)} onPair={pairAccount} onRevoke={id=>void revokeDevice(id)} onDeleteAccount={()=>void deleteAccount()} onLogout={()=>void logout()}/>}
    {!dashboard&&view!=='data'&&view!=='settings'&&<LoadingView error={loadError} onRetry={()=>void loadData(true)}/>}
   </main>
   <footer><span>WELLNESS SUPPORT — NOT MEDICAL DIAGNOSIS</span><span className="session"><i/> {mode==='live'?'API CONNECTED':'LAST SAVED DATA'}</span></footer>
@@ -262,13 +263,13 @@ function DataView({mode,profile,memories,onRebuild,onAdd,onExport,onForget,onDel
   <div className="data-status"><div><i className={mode}/><span>현재 연결</span><b>{mode==='live'?'운영 API · PostgreSQL 영구 저장':'오프라인 · 마지막 동기화 데이터'}</b></div><div><span>AI 사용 범위</span><b>계정별 개인화 · 범용 학습 제외</b></div><button onClick={onExport}><Archive/> 내 데이터 내려받기</button><button onClick={onForget}><BrainCircuit/> 대화 기억만 삭제</button><button onClick={onDelete}><Trash2/> 모든 기록과 AI 메모리 삭제</button></div><div className="safety-note"><BrainCircuit/><p><b>Morrow는 의료기기나 응급 서비스가 아닙니다.</b> 증상이 지속되거나 긴급한 도움이 필요하면 의료 전문가 또는 지역 응급기관에 연락하세요.</p></div></div>
 }
 
-function SettingsView({account,devices,aiHealthConsent,onAIHealthConsent,onPair,onRevoke,onDeleteAccount,onLogout}:{account:WebSession|null;devices:ConnectedDevice[];aiHealthConsent:boolean;onAIHealthConsent:(value:boolean)=>void;onPair:(code:string)=>Promise<void>;onRevoke:(id:string)=>void;onDeleteAccount:()=>void;onLogout:()=>void}){
+function SettingsView({account,devices,aiHealthConsent,aiHealthConsentSaving,onAIHealthConsent,onPair,onRevoke,onDeleteAccount,onLogout}:{account:WebSession|null;devices:ConnectedDevice[];aiHealthConsent:boolean;aiHealthConsentSaving:boolean;onAIHealthConsent:(value:boolean)=>void;onPair:(code:string)=>Promise<void>;onRevoke:(id:string)=>void;onDeleteAccount:()=>void;onLogout:()=>void}){
  const[pairCode,setPairCode]=useState('');const[pairing,setPairing]=useState(false);const[pairError,setPairError]=useState('');
  async function submitPair(event:FormEvent){event.preventDefault();const clean=pairCode.trim();if(!clean)return;setPairing(true);setPairError('');try{await onPair(clean);setPairCode('')}catch(error){setPairError(error instanceof ApiRequestError&&error.status===404?'코드가 만료됐거나 일치하지 않습니다. iPhone 설정의 최신 코드를 입력해 주세요.':error instanceof ApiRequestError&&error.status===409?'이 iPhone은 다른 아이디에 이미 연결되어 있습니다.':'연결하지 못했습니다. 네트워크 상태를 확인해 주세요.')}finally{setPairing(false)}}
  return <div className="page-view settings-view"><div className="page-heading"><div><span>ACCOUNT & CONNECTIONS</span><h1>계정과 연결을 설정하세요</h1><p>iPhone 연결, 로그인된 기기, AI 건강정보 사용 여부를 여기에서 관리해요.</p></div></div>
   <section className="device-pairing"><div><Watch/><span>IPHONE CONNECTION</span><b>{account?`사용자 ${account.userId}`:'서버 연결 대기'}</b><p>iPhone 설정의 코드를 한 번 입력하면 이 아이디에 연결되고, 다음 로그인부터는 다시 입력하지 않아도 됩니다.</p></div><form onSubmit={submitPair}><input aria-label="iPhone 연결 코드" maxLength={8} value={pairCode} onChange={event=>setPairCode(event.target.value.toUpperCase().replace(/[^2-9A-HJ-NP-Z-]/g,''))} placeholder="6자리 연결 코드"/><button disabled={pairing||!pairCode.trim()}>{pairing?<RefreshCw className="rotating"/>:<Signal/>} {pairing?'연결 확인 중':'iPhone 연결'}</button>{pairError?<small className="pair-error">{pairError}</small>:<small>현재 웹 기기 코드: {account?.pairingCode??'—'}</small>}</form></section>
   <section className="connected-devices"><span>CONNECTED DEVICES</span>{devices.length?devices.map(device=><article key={device.id}><div><b>{device.deviceName}</b><small>{device.platform} · {new Date(device.lastSeenAt).toLocaleString('ko-KR')}</small></div>{device.deviceId!==account?.deviceId&&<button onClick={()=>onRevoke(device.id)}>연결 해제</button>}</article>):<p className="devices-empty">연결된 기기를 불러오는 중이거나 아직 다른 기기가 없습니다.</p>}</section>
-  <section className="ai-consent"><div><BrainCircuit/><span><b>AI 답변에 건강 요약 사용</b><small>직접 허용한 경우에만 파생 건강 요약을 AI 답변에 사용합니다.</small></span></div><button className={aiHealthConsent?'on':''} onClick={()=>onAIHealthConsent(!aiHealthConsent)}>{aiHealthConsent?'허용됨':'허용 안 함'}</button></section>
+  <section className="ai-consent"><div><BrainCircuit/><span><b>AI 답변에 건강 요약 사용</b><small>직접 허용한 경우에만 파생 건강 요약을 AI 답변에 사용합니다.</small></span></div><button disabled={aiHealthConsentSaving} className={aiHealthConsent?'on':''} onClick={()=>onAIHealthConsent(!aiHealthConsent)}>{aiHealthConsentSaving?'저장 중':aiHealthConsent?'허용됨':'허용 안 함'}</button></section>
   <section className="settings-account"><div><LockKeyhole/><span><small>로그인 계정</small><b>{account?.userId??'연결되지 않음'}</b></span></div><div><button className="logout-button" onClick={onLogout}><LogOut/> 로그아웃</button><button className="danger-button" onClick={onDeleteAccount}><Trash2/> 계정 완전 삭제</button></div></section>
  </div>
 }
