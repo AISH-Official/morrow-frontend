@@ -159,6 +159,6 @@ final class WatchNotificationManager: ObservableObject {
 
     private func weeklyAction(_ id: String, _ weekday: Int, _ hour: Int, _ minute: Int, _ title: String, _ body: String) async {
         let content = UNMutableNotificationContent(); content.title = title; content.body = body; content.sound = .default; content.categoryIdentifier = "MORROW_ACTION"
-        try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: DateComponents(weekday: weekday, hour: hour, minute: minute), repeats: true)))
+        try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute, weekday: weekday), repeats: true)))
     }
 }
