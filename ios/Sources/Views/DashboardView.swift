@@ -10,7 +10,7 @@ struct DashboardView: View {
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
-        let result = analyzer.analyze(current: health.snapshot)
+        let result = analyzer.analyze(current: health.snapshot).using(score: syncService.recoveryScore)
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {

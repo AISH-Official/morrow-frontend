@@ -62,12 +62,12 @@ export async function getWebSession():Promise<WebSession>{
 }
 
 export async function pairWebSession(pairingCode:string):Promise<WebSession>{
- const value=await rawRequest<WebSession>('/auth/pair',{method:'POST',body:JSON.stringify({pairingCode,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})},false);
+ const value=await rawRequest<WebSession>('/auth/pair',{method:'POST',body:JSON.stringify({pairingCode,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})});
  return saveSession(value);
 }
 
-export async function loginWebSession(username:string,password:string):Promise<WebSession>{
- const value=await rawRequest<WebSession>('/auth/login',{method:'POST',body:JSON.stringify({username,password,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})},false);
+export async function loginWebSession(accountId:string):Promise<WebSession>{
+ const value=await rawRequest<WebSession>('/auth/account',{method:'POST',body:JSON.stringify({accountId,deviceId:`web-${installationId()}`,deviceName:navigator.userAgent.includes('Mobile')?'Mobile Web':'Web Browser',platform:'WEB'})},false);
  return saveSession(value);
 }
 

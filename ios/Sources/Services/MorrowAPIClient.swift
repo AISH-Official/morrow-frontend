@@ -21,6 +21,11 @@ struct NativeAssistantReply: Decodable {
     }
 }
 
+struct NativeDashboardSummary: Decodable {
+    let score: Int
+    let wellnessLoad: String
+}
+
 struct AIProactiveInsight: Decodable {
     let shouldNotify: Bool
     let title: String
@@ -57,17 +62,16 @@ actor MorrowAPIClient {
         cachedCredentials != nil || DeviceCredentialStore.load() != nil
     }
 
-    func login(username: String, password: String) async throws -> MorrowCredentials {
+    func login(accountId: String) async throws -> MorrowCredentials {
         guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? persistentInstallationId()
-        let payload = DemoLoginRequest(
-            username: username,
-            password: password,
+        let payload = AccountLoginRequest(
+            accountId: accountId,
             deviceId: "ios-\(deviceId)",
             deviceName: UIDevice.current.name,
             platform: "IOS"
         )
-        var request = URLRequest(url: root.appending(path: "auth/login"))
+        var request = URLRequest(url: root.appending(path: "auth/account"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(payload)
@@ -132,6 +136,24 @@ actor MorrowAPIClient {
         )
     }
 
+    func dashboard(canRefresh: Bool = true) async throws -> NativeDashboardSummary {
+        let credentials = try await credentials()
+        guard let root = MorrowRuntimeConfiguration.apiRoot,
+              var components = URLComponents(url: root.appending(path: "dashboard"), resolvingAgainstBaseURL: false) else { throw URLError(.badURL) }
+        components.queryItems = [URLQueryItem(name: "userId", value: credentials.userId)]
+        guard let url = components.url else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if canRefresh, let http = response as? HTTPURLResponse, http.statusCode == 401 {
+            cachedCredentials = nil
+            DeviceCredentialStore.clear()
+            return try await dashboard(canRefresh: false)
+        }
+        try validate(response)
+        return try decoder.decode(NativeDashboardSummary.self, from: data)
+    }
+
     func connectionContext() async throws -> (apiRoot: String, credentials: MorrowCredentials) {
         (MorrowRuntimeConfiguration.apiRootString, try await credentials())
     }
@@ -143,6 +165,7 @@ actor MorrowAPIClient {
 
     func pair(using pairingCode: String) async throws -> MorrowCredentials {
         guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
+        let current = try await credentials()
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? persistentInstallationId()
         let payload = PairDeviceRequest(
             pairingCode: pairingCode.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -153,6 +176,7 @@ actor MorrowAPIClient {
         var request = URLRequest(url: root.appending(path: "auth/pair"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(current.accessToken)", forHTTPHeaderField: "Authorization")
         request.httpBody = try encoder.encode(payload)
         let (data, response) = try await URLSession.shared.data(for: request)
         try validate(response)
@@ -225,7 +249,7 @@ actor MorrowAPIClient {
     private struct PushDeviceRequest: Encodable { let userId, deviceToken, platform, environment: String }
     private struct AssistantMessageRequest: Encodable { let userId, content: String }
     private struct ProactiveInsightRequest: Encodable { let userId: String }
-    private struct DemoLoginRequest: Encodable { let username, password, deviceId, deviceName, platform: String }
+    private struct AccountLoginRequest: Encodable { let accountId, deviceId, deviceName, platform: String }
 }
 
 private enum DeviceCredentialStore {

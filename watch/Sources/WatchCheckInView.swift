@@ -70,8 +70,8 @@ struct WatchCheckInView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().stroke(WatchTheme.accent.opacity(0.12), lineWidth: 7)
-                Circle().trim(from: 0, to: Double(session.context.load) / 100).stroke(WatchTheme.accent, style: StrokeStyle(lineWidth: 7, lineCap: .round)).rotationEffect(.degrees(-90)).shadow(color: WatchTheme.accent.opacity(0.35), radius: 5)
-                Text("\(session.context.load)").font(.system(size: 22, weight: .medium, design: .monospaced))
+                Circle().trim(from: 0, to: Double(session.context.score) / 100).stroke(WatchTheme.accent, style: StrokeStyle(lineWidth: 7, lineCap: .round)).rotationEffect(.degrees(-90)).shadow(color: WatchTheme.accent.opacity(0.35), radius: 5)
+                Text("\(session.context.score)").font(.system(size: 22, weight: .medium, design: .monospaced))
             }
             .frame(width: 74, height: 74)
             VStack(alignment: .leading, spacing: 4) {

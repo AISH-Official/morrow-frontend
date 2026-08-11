@@ -3,7 +3,7 @@ import SwiftUI
 struct LoadGaugeCard: View {
     let result: BaselineResult
     @State private var progress: Double = 0
-    private var level: LoadLevel { LoadLevel(load: result.load) }
+    private var level: RecoveryLevel { RecoveryLevel(score: result.score) }
 
     var body: some View {
         HStack(spacing: 18) {
@@ -15,7 +15,7 @@ struct LoadGaugeCard: View {
                     .rotationEffect(.degrees(-90))
                     .shadow(color: Theme.accent.opacity(0.24), radius: 10)
                 VStack(spacing: 1) {
-                    Text("\(result.load)")
+                    Text("\(result.score)")
                         .font(.system(size: 38, weight: .medium, design: .monospaced))
                         .foregroundStyle(Theme.textPrimary)
                     Text("RECOVERY")
@@ -41,7 +41,8 @@ struct LoadGaugeCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .morrowPanel()
-        .onAppear { withAnimation(.easeOut(duration: 0.9)) { progress = Double(result.load) / 100 } }
+        .onAppear { withAnimation(.easeOut(duration: 0.9)) { progress = Double(result.score) / 100 } }
+        .onChange(of: result.score) { _, score in withAnimation(.easeOut(duration: 0.45)) { progress = Double(score) / 100 } }
         .accessibilityElement(children: .combine)
     }
 }

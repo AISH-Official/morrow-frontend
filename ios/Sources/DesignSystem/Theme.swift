@@ -39,33 +39,33 @@ extension View {
     }
 }
 
-enum LoadLevel {
-    case low, moderate, elevated, high
+enum RecoveryLevel {
+    case critical, low, steady, strong
 
-    init(load: Int) {
-        switch load {
-        case ..<35: self = .low
-        case ..<55: self = .moderate
-        case ..<75: self = .elevated
-        default: self = .high
+    init(score: Int) {
+        switch score {
+        case ..<35: self = .critical
+        case ..<55: self = .low
+        case ..<75: self = .steady
+        default: self = .strong
         }
     }
 
     var label: String {
         switch self {
-        case .low: return "회복 여유가 충분해요"
-        case .moderate: return "안정적인 리듬이에요"
-        case .elevated: return "리듬 회복이 필요해요"
-        case .high: return "무리하지 않는 게 좋아요"
+        case .critical: return "무리하지 않는 게 좋아요"
+        case .low: return "리듬 회복이 필요해요"
+        case .steady: return "안정적인 리듬이에요"
+        case .strong: return "회복 여유가 충분해요"
         }
     }
 
     var color: Color {
         switch self {
-        case .low: return Theme.mint
-        case .moderate: return Theme.accent
-        case .elevated: return Color(red: 223 / 255, green: 189 / 255, blue: 119 / 255)
-        case .high: return Color(red: 255 / 255, green: 105 / 255, blue: 114 / 255)
+        case .critical: return Color(red: 255 / 255, green: 105 / 255, blue: 114 / 255)
+        case .low: return Color(red: 223 / 255, green: 189 / 255, blue: 119 / 255)
+        case .steady: return Theme.accent
+        case .strong: return Theme.mint
         }
     }
 

@@ -3,7 +3,7 @@ import Combine
 import WatchConnectivity
 
 struct WatchWellnessContext {
-    var load = 78
+    var score = 78
     var summary = "리듬 회복이 필요해요"
     var sleep = "6시간 45분"
     var hrv = "38 ms"
@@ -109,7 +109,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             self.isServerConnected = values["apiRoot"] as? String != nil && values["accessToken"] as? String != nil
             self.pairingCode = values["pairingCode"] as? String ?? self.pairingCode
             self.context = WatchWellnessContext(
-                load: values["load"] as? Int ?? self.context.load,
+                score: values["score"] as? Int ?? values["load"] as? Int ?? self.context.score,
                 summary: values["summary"] as? String ?? self.context.summary,
                 sleep: values["sleep"] as? String ?? self.context.sleep,
                 hrv: values["hrv"] as? String ?? self.context.hrv,

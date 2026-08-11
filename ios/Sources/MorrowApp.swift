@@ -47,8 +47,7 @@ private struct RootView: View {
 }
 
 private struct DemoLoginView: View {
-    @State private var username = "사용자"
-    @State private var password = ""
+    @State private var accountId = "사용자"
     @State private var isLoggingIn = false
     @State private var errorMessage = ""
     let onSuccess: () -> Void
@@ -60,18 +59,15 @@ private struct DemoLoginView: View {
                 Spacer()
                 VStack(alignment: .leading, spacing: 7) {
                     Text("MORROW").font(.system(size: 25, weight: .bold, design: .monospaced)).tracking(5).foregroundStyle(Theme.textPrimary)
-                    Text("HACKATHON DEMO LOGIN").morrowKicker()
+                    Text("ACCOUNT LOGIN").morrowKicker()
                 }
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("테스트 계정으로 시작하기", systemImage: "person.crop.circle.badge.checkmark")
+                    Label("아이디로 시작하기", systemImage: "person.crop.circle.badge.checkmark")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(Theme.textPrimary)
-                    TextField("사용자 이름", text: $username)
+                    TextField("아이디", text: $accountId)
                         .textContentType(.username)
                         .textInputAutocapitalization(.never)
-                        .loginField()
-                    SecureField("비밀번호", text: $password)
-                        .textContentType(.password)
                         .loginField()
                     if !errorMessage.isEmpty {
                         Text(errorMessage).font(.caption).foregroundStyle(.red)
@@ -89,11 +85,11 @@ private struct DemoLoginView: View {
                         .frame(height: 52)
                         .background(LinearGradient(colors: [Theme.accent, Theme.mint], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 14))
                     }
-                    .disabled(isLoggingIn || username.isEmpty || password.isEmpty)
+                    .disabled(isLoggingIn || accountId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 .padding(18)
                 .morrowPanel(cornerRadius: 20)
-                Text("해커톤 시연용 단일 계정입니다. 로그인 후 iPhone과 Watch가 같은 건강 요약과 AI 대화를 사용합니다.")
+                Text("처음에는 아이디만 입력합니다. 웹 연결 코드는 로그인 후 설정에서 한 번만 연결하세요.")
                     .font(.caption)
                     .foregroundStyle(Theme.textMuted)
                 Spacer()
@@ -109,10 +105,10 @@ private struct DemoLoginView: View {
         errorMessage = ""
         defer { isLoggingIn = false }
         do {
-            _ = try await MorrowAPIClient.shared.login(username: username, password: password)
+            _ = try await MorrowAPIClient.shared.login(accountId: accountId.trimmingCharacters(in: .whitespacesAndNewlines))
             onSuccess()
         } catch {
-            errorMessage = "사용자 이름 또는 비밀번호를 확인해 주세요."
+            errorMessage = "아이디를 확인하거나 잠시 후 다시 시도해 주세요."
         }
     }
 }
@@ -150,6 +146,7 @@ private struct AuthenticatedRootView: View {
             .onChange(of: watchReceiver.healthInboxVersion) { _, _ in importWatchHealth() }
             .onChange(of: healthSignature) { _, _ in syncWatchContext(); Task { await synchronize() } }
             .onChange(of: checkInSignature) { _, _ in Task { await synchronize() } }
+            .onChange(of: syncService.recoveryScore) { _, _ in syncWatchContext() }
             .onChange(of: scenePhase) { _, phase in if phase == .active { importWatchCheckIns(); syncWatchContext(); Task { await synchronize() } } }
     }
 
@@ -186,9 +183,10 @@ private struct AuthenticatedRootView: View {
 
     private func syncWatchContext() {
         let result = analyzer.analyze(current: healthStore.snapshot)
+        let score = syncService.recoveryScore ?? result.score
         watchReceiver.sendWellnessContext(
-            load: result.load,
-            summary: LoadLevel(load: result.load).label,
+            score: score,
+            summary: RecoveryLevel(score: score).label,
             snapshot: healthStore.snapshot,
             recommendation: "7분 동안 가볍게 걸어보세요"
         )
@@ -217,6 +215,7 @@ private struct AuthenticatedRootView: View {
 final class MorrowSyncService: ObservableObject {
     enum State { case idle, syncing, synced(Date), failed(String) }
     @Published private(set) var state: State = .idle
+    @Published private(set) var recoveryScore: Int?
     private let client = MorrowAPIClient.shared
 
     var statusText: String {
@@ -233,6 +232,8 @@ final class MorrowSyncService: ObservableObject {
         do {
             for record in checkIns { try await upload(record) }
             if let snapshot, snapshot.hasHealthData { try await upload(snapshot) }
+            let dashboard = try await client.dashboard()
+            recoveryScore = dashboard.score
             state = .synced(.now)
         } catch {
             state = .failed(error.localizedDescription)
@@ -252,6 +253,8 @@ final class MorrowSyncService: ObservableObject {
                 recordedAt: summary.recordedAt
             )
             try await post(payload, path: "health/snapshots")
+            let dashboard = try await client.dashboard()
+            recoveryScore = dashboard.score
             state = .synced(.now)
         } catch { state = .failed(error.localizedDescription) }
     }

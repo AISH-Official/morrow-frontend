@@ -44,10 +44,10 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
         return values
     }
 
-    func sendWellnessContext(load: Int, summary: String, snapshot: HealthSnapshot, recommendation: String) {
+    func sendWellnessContext(score: Int, summary: String, snapshot: HealthSnapshot, recommendation: String) {
         var context: [String: Any] = pendingContext ?? [:]
         context.merge([
-            "load": load,
+            "score": score,
             "summary": summary,
             "sleep": snapshot.sleepText,
             "hrv": snapshot.hrvText,
