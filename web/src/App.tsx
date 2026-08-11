@@ -1,6 +1,7 @@
 import{FormEvent,useEffect,useMemo,useRef,useState}from'react';
-import{Activity,Archive,BarChart3,BrainCircuit,Check,ChevronRight,Command,Footprints,HeartPulse,History,LockKeyhole,LogOut,Mic,MicOff,MoonStar,Plus,RefreshCw,Send,Settings2,ShieldCheck,Signal,Sparkles,ThumbsDown,ThumbsUp,Trash2,Volume2,VolumeX,Watch,X}from'lucide-react';
-import{ApiRequestError,addPersonalMemory,clearAssistantConversation,clearWellnessData,createCheckIn,deleteAccountCompletely,exportAccountData,getAiHealthConsent,getConnectedDevices,getDashboard,getPersonalization,getStoredWebSession,getWeeklyReport,isSessionExpired,loginWebSession,logoutWebSession,pairWebSession,rebuildPersonalization,revokeConnectedDevice,sendAssistantMessage,setAiHealthConsent,submitRecommendationFeedback}from'./api';
+import{Activity,Archive,BarChart3,BrainCircuit,Check,ChevronRight,Command,Footprints,HeartPulse,History,LockKeyhole,LogOut,Mic,MicOff,MoonStar,Plus,RefreshCw,Send,Settings2,ShieldCheck,Signal,Sparkles,ThumbsDown,Trash2,Volume2,VolumeX,Watch,X}from'lucide-react';
+import{ApiRequestError,addPersonalMemory,applyDemoScenario,clearAssistantConversation,clearWellnessData,completeRecoveryAttempt,createCheckIn,createRecoveryAttempt,deleteAccountCompletely,exportAccountData,getAiHealthConsent,getConnectedDevices,getDashboard,getPersonalization,getStoredWebSession,getWeeklyReport,isSessionExpired,loginWebSession,logoutWebSession,pairWebSession,rebuildPersonalization,revokeConnectedDevice,sendAssistantMessage,setAiHealthConsent,submitRecommendationFeedback}from'./api';
+import type{DemoScenario,RecoveryAction}from'./api';
 import type{WebSession}from'./api';
 import type{ConnectedDevice}from'./api';
 import type{CheckInCause,CheckInInput,CheckInStatus,ConnectionMode,Dashboard,PersonalizationProfile,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
@@ -46,6 +47,8 @@ export default function App(){
  const[sound,setSound]=useState(false);
  const[chats,setChats]=useState<Chat[]>(welcomeChats);
  const[checkInOpen,setCheckInOpen]=useState(false);
+ const[recoveryOpen,setRecoveryOpen]=useState(false);
+ const[demoOpen,setDemoOpen]=useState(false);
  const[toast,setToast]=useState('');
  const[feedbackDone,setFeedbackDone]=useState(false);
  const[refreshing,setRefreshing]=useState(false);
@@ -154,6 +157,8 @@ export default function App(){
 
  async function rebuildLearning(){try{await rebuildPersonalization();const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('전체 기록에서 개인화 메모리를 다시 학습했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('백엔드에 연결한 뒤 다시 시도해 주세요.')}}
  async function addMemory(type:'PREFERENCE'|'GOAL',summary:string){try{await addPersonalMemory(type,summary);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories);setToast('직접 알려준 내용을 개인화 메모리에 저장했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('메모리를 저장하지 못했어요.')}}
+ async function loadDemoScenario(scenario:DemoScenario){
+  try{const result=await applyDemoScenario(scenario);if(account)clearCachedState(account.userId);await loadData(true);setChats([{id:nextId.current++,role:'ai',text:`${result.title} 시나리오를 준비했어요. 오늘의 회복 신호와 주간 리포트에서 감지 근거와 실제 효과를 확인해 보세요.`}]);setDemoOpen(false);setView('today');setToast('심사용 데모 데이터를 적용했어요.')}catch(error){if(isSessionExpired(error))expireSession();else setToast('데모 시나리오를 준비하지 못했어요.')}}
  async function connectPhoneAccount(code:string){
   const previousUserId=account?.userId;const value=await pairWebSession(code);
   if(previousUserId&&previousUserId!==value.userId)clearCachedState(previousUserId);
@@ -178,9 +183,9 @@ export default function App(){
  return <div className={`app-shell phase-${phase}`}>
   <div className="atmosphere"/><div className="grid-floor"/>
   <aside className="rail" aria-label="주요 메뉴"><button className="mark" onClick={()=>setView('today')} aria-label="Morrow 홈">M</button><nav>{navItems.map(([key,label,Icon])=><button key={key} className={view===key?'on':''} onClick={()=>setView(key)} aria-label={label} title={label}><Icon/></button>)}</nav></aside>
-  <header className="topbar"><div className="identity"><i className="status-dot"/><div><b>MORROW</b><span>PERSONAL WELLNESS INTELLIGENCE</span></div></div><div className="system-status"><span className={`mode ${mode}`}><Signal/> {mode==='live'?'LIVE API':'OFFLINE · LAST SYNC'}</span><span><BrainCircuit/> {aiMode==='LIVE'?'AI LIVE':personalization?.personalized?`MEMORY ${personalization.evidenceCount}`:'AI READY'}</span><span><ShieldCheck/> PRIVATE BY DESIGN</span><button onClick={newSession}><Plus/> NEW SESSION</button></div></header>
+  <header className="topbar"><div className="identity"><i className="status-dot"/><div><b>MORROW</b><span>PERSONAL WELLNESS INTELLIGENCE</span></div></div><div className="system-status"><span className={`mode ${mode}`}><Signal/> {mode==='live'?'LIVE API':'OFFLINE · LAST SYNC'}</span><span><BrainCircuit/> {aiMode==='LIVE'?'AI LIVE':personalization?.personalized?`MEMORY ${personalization.evidenceCount}`:'AI READY'}</span><span><ShieldCheck/> PRIVATE BY DESIGN</span>{(account?.userId==='hackathon-demo'||account?.userId.startsWith('demo-'))&&<button className="demo-button" onClick={()=>setDemoOpen(true)}><Sparkles/> DEMO</button>}<button onClick={newSession}><Plus/> NEW SESSION</button></div></header>
   <main className="main-area">
-   {dashboard&&view==='today'&&<TodayView dashboard={dashboard} phase={phase} phaseText={phaseText} particles={particles} chats={chats} message={message} sound={sound} feedbackDone={feedbackDone} refreshing={refreshing} onMessage={setMessage} onSend={send} onMic={toggleMic} onSound={()=>{setSound(value=>!value);window.speechSynthesis?.cancel()}} onSuggestion={send} onCheckIn={()=>setCheckInOpen(true)} onFeedback={feedback} onRefresh={()=>void loadData(true)}/>}
+   {dashboard&&view==='today'&&<TodayView dashboard={dashboard} phase={phase} phaseText={phaseText} particles={particles} chats={chats} message={message} sound={sound} feedbackDone={feedbackDone} refreshing={refreshing} onMessage={setMessage} onSend={send} onMic={toggleMic} onSound={()=>{setSound(value=>!value);window.speechSynthesis?.cancel()}} onSuggestion={send} onCheckIn={()=>setCheckInOpen(true)} onRecovery={()=>setRecoveryOpen(true)} onFeedback={feedback} onRefresh={()=>void loadData(true)}/>}
    {dashboard&&view==='timeline'&&<TimelineView items={dashboard.timeline} onCheckIn={()=>setCheckInOpen(true)}/>}
    {report&&view==='report'&&<ReportView report={report}/>}
    {view==='data'&&<DataView mode={mode} profile={personalization} memories={memories} onRebuild={()=>void rebuildLearning()} onAdd={addMemory} onExport={()=>void downloadData()} onForget={()=>void forgetConversation()} onDelete={()=>void deleteData()}/>}
@@ -189,13 +194,15 @@ export default function App(){
   </main>
   <footer><span>WELLNESS SUPPORT — NOT MEDICAL DIAGNOSIS</span><span className="session"><i/> {mode==='live'?'API CONNECTED':'LAST SAVED DATA'}</span></footer>
   {checkInOpen&&<CheckInModal userId={account?.userId??'pending-user'} onClose={()=>setCheckInOpen(false)} onSave={saveCheckIn}/>}
+  {recoveryOpen&&dashboard&&<RecoveryModal action={actionForRecommendation(dashboard.recommendation?.title)} reason={dashboard.recommendation?.rationale??dashboard.scoreReasons?.[0]??'최근 개인 기준에서 회복 행동이 필요해 보여요.'} confidence={dashboard.scoreConfidence} onClose={()=>setRecoveryOpen(false)} onComplete={outcome=>{setRecoveryOpen(false);void feedback(outcome==='IMPROVED')}}/>}
+  {demoOpen&&<DemoScenarioModal onClose={()=>setDemoOpen(false)} onApply={loadDemoScenario}/>}
   {toast&&<div className="toast" role="status"><Check/>{toast}</div>}
  </div>
 }
 
-type TodayProps={dashboard:Dashboard;phase:Phase;phaseText:string;particles:{left:string;top:string;delay:string;size:number}[];chats:Chat[];message:string;sound:boolean;feedbackDone:boolean;refreshing:boolean;onMessage:(value:string)=>void;onSend:(value?:string)=>void;onMic:()=>void;onSound:()=>void;onSuggestion:(value:string)=>void;onCheckIn:()=>void;onFeedback:(helpful:boolean)=>void;onRefresh:()=>void};
+type TodayProps={dashboard:Dashboard;phase:Phase;phaseText:string;particles:{left:string;top:string;delay:string;size:number}[];chats:Chat[];message:string;sound:boolean;feedbackDone:boolean;refreshing:boolean;onMessage:(value:string)=>void;onSend:(value?:string)=>void;onMic:()=>void;onSound:()=>void;onSuggestion:(value:string)=>void;onCheckIn:()=>void;onRecovery:()=>void;onFeedback:(helpful:boolean)=>void;onRefresh:()=>void};
 
-function TodayView({dashboard,phase,phaseText,particles,chats,message,sound,feedbackDone,refreshing,onMessage,onSend,onMic,onSound,onSuggestion,onCheckIn,onFeedback,onRefresh}:TodayProps){
+function TodayView({dashboard,phase,phaseText,particles,chats,message,sound,feedbackDone,refreshing,onMessage,onSend,onMic,onSound,onSuggestion,onCheckIn,onRecovery,onFeedback,onRefresh}:TodayProps){
  const sleepHours=Math.floor(dashboard.metrics.sleepMinutes/60);const sleepMinutes=dashboard.metrics.sleepMinutes%60;
  const conversationRef=useRef<HTMLDivElement>(null);
  useEffect(()=>{const node=conversationRef.current;if(node)node.scrollTo({top:node.scrollHeight,behavior:phase==='speaking'?'auto':'smooth'})},[chats,phase]);
@@ -212,7 +219,7 @@ function TodayView({dashboard,phase,phaseText,particles,chats,message,sound,feed
    <div className="insight-heading"><div><span>TODAY · PERSONAL BASELINE</span><h1>오늘의 회복 신호</h1></div><button onClick={onCheckIn}><Plus/> 체크인</button></div>
    <div className="score-card"><div className="score-ring" style={{'--score':`${dashboard.score*3.6}deg`} as React.CSSProperties}><div><b>{dashboard.score>0?dashboard.score:'—'}</b><span>회복 여유</span></div></div><div className="score-copy"><span className="load-badge">{dashboard.score===0?'데이터 대기':dashboard.wellnessLoad==='NORMAL'?'안정적':dashboard.wellnessLoad==='MODERATE'?'조금 높음':'평소보다 높음'}</span><h2>{dashboard.score===0?<>HealthKit 데이터를<br/>연결해 주세요.</>:<>무리하기보다<br/>리듬을 되찾아 보세요.</>}</h2><p>{dashboard.scoreReasons?.[0]??'최근 기록이 쌓이면 개인 기준선과 비교해 드려요.'}</p></div></div>
    <div className="metric-grid"><Metric icon={<MoonStar/>} label="수면" value={dashboard.metrics.sleepMinutes>0?`${sleepHours}h ${sleepMinutes}m`:'—'} trend="HealthKit 파생 요약"/><Metric icon={<HeartPulse/>} label="안정 심박" value={dashboard.metrics.restingHeartRate>0?`${dashboard.metrics.restingHeartRate} bpm`:'—'} trend="최근 동기화 값"/><Metric icon={<Activity/>} label="HRV" value={dashboard.metrics.hrv>0?`${dashboard.metrics.hrv} ms`:'—'} trend="최근 동기화 값"/><Metric icon={<Footprints/>} label="걸음" value={dashboard.metrics.steps>0?dashboard.metrics.steps.toLocaleString('ko-KR'):'—'} trend="iPhone · Watch 연동"/><Metric icon={<Activity/>} label="활동 에너지" value={dashboard.metrics.activeEnergyKcal>0?`${dashboard.metrics.activeEnergyKcal} kcal`:'—'} trend="오늘 누적"/><Metric icon={<Watch/>} label="운동" value={dashboard.metrics.exerciseMinutes>0?`${dashboard.metrics.exerciseMinutes}분`:'—'} trend="오늘 누적"/></div>
-   {dashboard.recommendation?<div className="recommendation"><div className="recommend-top"><span><Sparkles/> NEXT BEST ACTION</span><small>약 7분</small></div><h2>{dashboard.recommendation.title}</h2><p>{dashboard.recommendation.rationale}</p>{feedbackDone?<div className="feedback-complete"><Check/> 피드백을 반영했어요</div>:<div className="recommend-actions"><button className="primary" onClick={()=>onFeedback(true)}><ThumbsUp/> 해봤고 도움 됐어요</button><button onClick={()=>onFeedback(false)} aria-label="도움이 되지 않았어요"><ThumbsDown/></button></div>}</div>:<button className="empty-recommendation" onClick={onCheckIn}><Plus/> 지금 상태를 기록하면 맞춤 행동을 제안해요</button>}
+   {dashboard.recommendation?<div className="recommendation"><div className="recommend-top"><span><Sparkles/> NEXT BEST ACTION</span><small>실행 후 효과 학습</small></div><h2>{dashboard.recommendation.title}</h2><p>{dashboard.recommendation.rationale}</p>{feedbackDone?<div className="feedback-complete"><Check/> 실행 효과를 다음 추천에 반영했어요</div>:<div className="recommend-actions"><button className="primary" onClick={onRecovery}><Sparkles/> 지금 바로 실행</button><button onClick={()=>onFeedback(false)} aria-label="다른 행동 추천"><ThumbsDown/></button></div>}</div>:<button className="empty-recommendation" onClick={onCheckIn}><Plus/> 지금 상태를 기록하면 맞춤 행동을 제안해요</button>}
   </aside>
   <section className="timeline-strip"><div className="strip-head"><span>TODAY'S SIGNAL STORY</span><b>{dashboard.timeline.length}개의 의미 있는 변화</b></div><div className="timeline-cards">{dashboard.timeline.slice(-3).map(item=><TimelineCard key={item.id} item={item}/>)}</div></section>
  </div>
@@ -226,7 +233,18 @@ function TimelineView({items,onCheckIn}:{items:TimelineItem[];onCheckIn:()=>void
 
 function ReportView({report}:{report:WeeklyReport}){
  const points=report.dailyScores??[];
- return <div className="page-view report-view"><div className="page-heading"><div><span>WEEKLY PATTERN REPORT</span><h1>이번 주, 무엇이 달랐을까요?</h1><p>단정 대신 반복된 신호와 회복에 도움이 된 행동을 보여줘요.</p></div><div className="week-chip">{weekRange()}</div></div><div className="report-grid"><section className="report-hero"><div><span>WELLNESS MOMENTUM</span><b>{report.totalCheckIns?Math.round(report.improvementRate):'—'}</b><small>{report.totalCheckIns?`지난주 대비 ${report.changeFromPrevious>=0?'+':''}${Math.round(report.changeFromPrevious)}점`:'체크인이 필요해요'}</small></div><div className="weekly-chart">{points.map((point,index)=><div key={point.date}><i style={{height:`${point.score??2}%`}} className={point.score!==null&&point.score===Math.max(...points.map(value=>value.score??0))?'peak':''}/><span>{['일','월','화','수','목','금','토'][new Date(`${point.date}T00:00:00`).getDay()]}</span></div>)}</div></section><section className="report-summary"><span>이번 주 요약</span><h2>{report.insights}</h2><div><small>체크인</small><b>{report.totalCheckIns}회</b></div><div><small>가장 잦은 상태</small><b>{statusLabel[report.topStatus??'']??'기록 없음'}</b></div><div><small>주요 맥락</small><b>{causeLabel[report.topCause??'']??'기록 없음'}</b></div></section><section className="patterns"><span>PATTERN INTELLIGENCE</span>{report.patterns.map((pattern,index)=><article key={pattern}><i>0{index+1}</i><p>{translatePattern(pattern)}</p></article>)}</section><section className="trust-card"><ShieldCheck/><div><b>이 인사이트를 믿을 수 있는 이유</b><p>실제 일별 체크인과 지난주 기록만 비교했어요. 의료적 판단이나 다른 사용자와의 비교는 하지 않습니다.</p></div></section></div></div>
+ return <div className="page-view report-view"><div className="page-heading"><div><span>WEEKLY PATTERN REPORT</span><h1>이번 주, 무엇이 실제로 도움이 됐을까요?</h1><p>상태 변화뿐 아니라 실행한 회복 행동과 직접 남긴 효과를 함께 보여줘요.</p></div><div className="week-chip">{weekRange()}</div></div><div className="report-grid"><section className="report-hero"><div><span>WELLNESS MOMENTUM</span><b>{report.totalCheckIns?Math.round(report.improvementRate):'—'}</b><small>{report.totalCheckIns?`지난주 대비 ${report.changeFromPrevious>=0?'+':''}${Math.round(report.changeFromPrevious)}점`:'체크인이 필요해요'}</small></div><div className="weekly-chart">{points.map((point,index)=><div key={point.date}><i style={{height:`${point.score??2}%`}} className={point.score!==null&&point.score===Math.max(...points.map(value=>value.score??0))?'peak':''}/><span>{['일','월','화','수','목','금','토'][new Date(`${point.date}T00:00:00`).getDay()]}</span></div>)}</div></section><section className="report-summary"><span>이번 주 요약</span><h2>{report.insights}</h2><div><small>체크인</small><b>{report.totalCheckIns}회</b></div><div><small>가장 잦은 상태</small><b>{statusLabel[report.topStatus??'']??'기록 없음'}</b></div><div><small>주요 맥락</small><b>{causeLabel[report.topCause??'']??'기록 없음'}</b></div></section><section className="recovery-effect"><div><span>RECOVERY EFFECT LOOP</span><h2>{report.topHelpfulAction??'효과를 학습하는 중'}</h2><p>{report.recoveryInsight}</p></div><div className="effect-metrics"><div><small>제안</small><b>{report.suggestedRecoveryCount}회</b></div><div><small>완료</small><b>{report.completedRecoveryCount}회</b></div><div><small>나아짐</small><b>{Math.round(report.recoveryHelpfulRate)}%</b></div></div></section><section className="patterns"><span>PATTERN INTELLIGENCE</span>{report.patterns.map((pattern,index)=><article key={pattern}><i>0{index+1}</i><p>{translatePattern(pattern)}</p></article>)}</section><section className="trust-card"><ShieldCheck/><div><b>이 인사이트를 믿을 수 있는 이유</b><p>실제 일별 체크인과 회복 행동 뒤 직접 남긴 효과만 비교했어요. 의료적 판단이나 다른 사용자와의 비교는 하지 않습니다.</p></div></section></div></div>
+}
+
+function DemoScenarioModal({onClose,onApply}:{onClose:()=>void;onApply:(scenario:DemoScenario)=>Promise<void>}){
+ const[loading,setLoading]=useState<DemoScenario|null>(null);
+ const scenarios:{key:DemoScenario;title:string;description:string}[]=[
+  {key:'SHORT_SLEEP',title:'짧은 수면 뒤 오전 피로',description:'수면 감소 → 피로 체크인 → 물과 짧은 걷기 → 효과 학습'},
+  {key:'SEDENTARY',title:'오래 앉은 오후의 집중 저하',description:'낮은 활동량 → 집중 저하 → 스트레칭 → 효과 학습'},
+  {key:'TENSION',title:'발표 전 긴장 상승',description:'긴장 신호 → 근거 설명 → 1분 호흡 → 효과 학습'}
+ ];
+ async function choose(value:DemoScenario){setLoading(value);await onApply(value);setLoading(null)}
+ return <div className="modal-backdrop"><div className="demo-modal" role="dialog" aria-modal="true" aria-label="데모 시나리오 선택"><button className="modal-close" onClick={onClose} aria-label="닫기"><X/></button><span>AAC JUDGING SCENARIOS</span><h2>감지부터 효과 학습까지<br/>한 흐름으로 확인하세요</h2><p>선택한 시나리오의 합성 데이터로 데모 계정만 초기화됩니다.</p><div>{scenarios.map(item=><button key={item.key} onClick={()=>void choose(item.key)} disabled={loading!==null}><i><Sparkles/></i><span><b>{item.title}</b><small>{item.description}</small></span>{loading===item.key?<RefreshCw className="rotating"/>:<ChevronRight/>}</button>)}</div><small><ShieldCheck/> 실제 사용자 기록에는 영향을 주지 않습니다.</small></div></div>
 }
 
 function DataView({mode,profile,memories,onRebuild,onAdd,onExport,onForget,onDelete}:{mode:ConnectionMode;profile:PersonalizationProfile|null;memories:UserMemory[];onRebuild:()=>void;onAdd:(type:'PREFERENCE'|'GOAL',summary:string)=>Promise<void>;onExport:()=>void;onForget:()=>void;onDelete:()=>void}){
@@ -236,6 +254,7 @@ function DataView({mode,profile,memories,onRebuild,onAdd,onExport,onForget,onDel
  return <div className="page-view privacy-view"><div className="page-heading"><div><span>MY DATA & PERSONAL MEMORY</span><h1>내 기록과 AI 기억을 관리하세요</h1><p>쌓인 기록, 개인화 근거, 데이터 보관 범위를 한 화면에서 확인하고 관리할 수 있어요.</p></div><button className="page-action" onClick={onRebuild}><RefreshCw/> 기록에서 다시 학습</button></div>
   <section className="learning-console">
    <div className="learning-score"><BrainCircuit/><div><span>PERSONALIZATION ENGINE</span><b>{profile?.personalized?'개인화 활성':'학습 대기'}</b><p>활성 메모리 {profile?.activeMemoryCount??0}개 · 누적 근거 {profile?.evidenceCount??0}건 · 도움 된 전략 {profile?.helpfulStrategyCount??0}개</p></div></div>
+   <div className="routine-presets"><span>회복이 자주 필요한 순간</span>{['수면이 부족한 아침','업무·학업 중 집중이 흐려질 때','오래 앉아 움직임이 적을 때','발표·회의 전 긴장될 때'].map(value=><button key={value} onClick={()=>void onAdd('GOAL',value)}>{value}</button>)}</div>
    <form className="memory-form" onSubmit={submitMemory}><div><button type="button" className={memoryType==='PREFERENCE'?'on':''} onClick={()=>setMemoryType('PREFERENCE')}>내 선호</button><button type="button" className={memoryType==='GOAL'?'on':''} onClick={()=>setMemoryType('GOAL')}>내 목표</button></div><input maxLength={600} value={memoryText} onChange={event=>setMemoryText(event.target.value)} placeholder="예: 강한 운동보다 짧은 산책을 선호해요"/><button disabled={saving||!memoryText.trim()}><Plus/> 기억하기</button></form>
    <div className="memory-list">{memories.length?memories.slice(0,8).map(memory=><article key={memory.id}><span>{memoryLabel[memory.type]}</span><p>{memory.summary}</p><small>신뢰도 {Math.round(memory.confidence*100)}% · 근거 {memory.evidenceCount}건</small></article>):<div className="memory-empty">체크인과 추천 피드백이 쌓이면 여기에 개인화 근거가 표시됩니다.</div>}</div>
   </section>
@@ -252,6 +271,25 @@ function SettingsView({account,devices,aiHealthConsent,onAIHealthConsent,onPair,
   <section className="ai-consent"><div><BrainCircuit/><span><b>AI 답변에 건강 요약 사용</b><small>직접 허용한 경우에만 파생 건강 요약을 AI 답변에 사용합니다.</small></span></div><button className={aiHealthConsent?'on':''} onClick={()=>onAIHealthConsent(!aiHealthConsent)}>{aiHealthConsent?'허용됨':'허용 안 함'}</button></section>
   <section className="settings-account"><div><LockKeyhole/><span><small>로그인 계정</small><b>{account?.userId??'연결되지 않음'}</b></span></div><div><button className="logout-button" onClick={onLogout}><LogOut/> 로그아웃</button><button className="danger-button" onClick={onDeleteAccount}><Trash2/> 계정 완전 삭제</button></div></section>
  </div>
+}
+
+function actionForRecommendation(title?:string):RecoveryAction{
+ const value=title??'';
+ if(value.includes('걷')||value.includes('산책'))return'WALK';
+ if(value.includes('물'))return'WATER_WALK';
+ if(value.includes('스트레칭')||value.includes('어깨'))return'STRETCH';
+ if(value.includes('집중')||value.includes('할 일'))return'FOCUS';
+ if(value.includes('화면')||value.includes('눈'))return'SCREEN_BREAK';
+ return'BREATH';
+}
+
+function RecoveryModal({action,reason,confidence,onClose,onComplete}:{action:RecoveryAction;reason:string;confidence:string;onClose:()=>void;onComplete:(outcome:'IMPROVED'|'SAME'|'WORSE')=>void}){
+ const[remaining,setRemaining]=useState(60);const[running,setRunning]=useState(false);const[attemptId,setAttemptId]=useState('');const[submitting,setSubmitting]=useState(false);
+ const labels:Record<RecoveryAction,[string,string]>={BREATH:['1분 호흡','4초 들이쉬고 6초 내쉬어 보세요.'],WALK:['1분 가볍게 걷기','자리에서 일어나 편한 속도로 움직여 보세요.'],WATER_WALK:['물 한 잔과 걷기','물을 마시고 잠시 천천히 걸어보세요.'],STRETCH:['1분 스트레칭','목과 어깨부터 천천히 풀어보세요.'],FOCUS:['1분 집중 시작','방해 요소를 닫고 한 가지만 시작해 보세요.'],SCREEN_BREAK:['1분 화면 휴식','먼 곳을 바라보고 어깨 힘을 빼보세요.']};
+ useEffect(()=>{let active=true;void createRecoveryAttempt(action,reason,confidence).then(value=>{if(active)setAttemptId(value.id)}).catch(()=>{});return()=>{active=false}},[action,reason,confidence]);
+ useEffect(()=>{if(!running||remaining<=0)return;const timer=window.setInterval(()=>setRemaining(value=>{if(value<=1){window.clearInterval(timer);setRunning(false);return 0}return value-1}),1000);return()=>window.clearInterval(timer)},[running,remaining]);
+ async function finish(outcome:'IMPROVED'|'SAME'|'WORSE'){if(submitting)return;setSubmitting(true);try{if(attemptId)await completeRecoveryAttempt(attemptId,outcome)}finally{onComplete(outcome)}}
+ return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><section className="recovery-modal"><button className="modal-close" onClick={onClose} aria-label="닫기"><X/></button><span>WHY NOW · {confidence}</span><p className="recovery-reason">{reason}</p><div className="recovery-timer" style={{'--progress':`${(60-remaining)*6}deg`} as React.CSSProperties}><div><b>{remaining}</b><small>{running?'회복 중':labels[action][0]}</small></div></div>{remaining>0?<><h2>{labels[action][0]}</h2><p>{labels[action][1]}</p><button className="recovery-start" onClick={()=>setRunning(value=>!value)}>{running?'잠시 멈춤':'지금 시작'}</button></>:<><h2>실행 전보다 조금 나아졌나요?</h2><div className="recovery-outcomes"><button disabled={submitting} onClick={()=>void finish('IMPROVED')}>나아졌어요</button><button disabled={submitting} onClick={()=>void finish('SAME')}>그대로예요</button><button disabled={submitting} onClick={()=>void finish('WORSE')}>더 불편해요</button></div></>}</section></div>
 }
 
 function CheckInModal({userId,onClose,onSave}:{userId:string;onClose:()=>void;onSave:(input:CheckInInput)=>Promise<void>}){

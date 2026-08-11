@@ -15,9 +15,20 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
+	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.qlsl1198.morrowwellness.watch.recovery</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>morrow</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>
@@ -31,9 +42,9 @@
 	<string>Morrow Watch는 심박, HRV, 걸음, 활동 에너지와 운동 시간을 읽어 손목에서 웰니스 요약을 보여줍니다.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Morrow Watch는 건강 데이터를 추가하거나 변경하지 않습니다.</string>
-	<key>WKCompanionAppBundleIdentifier</key>
-	<string>com.qlsl1198.morrowwellness</string>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.qlsl1198.morrowwellness</string>
 </dict>
 </plist>

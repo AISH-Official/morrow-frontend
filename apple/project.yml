@@ -23,8 +23,26 @@ targets:
       - path: Morrow/Assets.xcassets
     info:
       path: Morrow/Info.plist
+      properties:
+        ITSAppUsesNonExemptEncryption: false
+        NSHealthShareUsageDescription: Morrow는 수면, 걸음, 심박, HRV, 활동, 호흡 데이터를 읽어 개인 웰니스 요약과 기기 간 동기화를 제공합니다.
+        NSHealthUpdateUsageDescription: Morrow는 건강 데이터 권한을 안전하게 관리하기 위해 HealthKit 접근을 사용하며 건강 데이터를 추가하거나 변경하지 않습니다.
+        MORROW_API_BASE_URL: https://9x4mms7o9g.execute-api.ap-southeast-2.amazonaws.com/api/v1
+        MORROW_USER_ID: default-user
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            localhost:
+              NSExceptionAllowsInsecureHTTPLoads: true
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - remote-notification
     entitlements:
       path: Morrow/Morrow.entitlements
+      properties:
+        aps-environment: development
+        com.apple.developer.healthkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.qlsl1198.morrowwellness
@@ -39,6 +57,7 @@ targets:
   MorrowWatch:
     type: application
     platform: watchOS
+    productName: Morrow Watch
     sources:
       - path: ../watch/Sources
       - path: MorrowWatch/Resources
@@ -46,8 +65,24 @@ targets:
       - path: MorrowWatch/Assets.xcassets
     info:
       path: MorrowWatch/Info.plist
+      properties:
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSHealthShareUsageDescription: Morrow Watch는 심박, HRV, 걸음, 활동 에너지와 운동 시간을 읽어 손목에서 웰니스 요약을 보여줍니다.
+        NSHealthUpdateUsageDescription: Morrow Watch는 건강 데이터를 추가하거나 변경하지 않습니다.
+        WKCompanionAppBundleIdentifier: com.qlsl1198.morrowwellness
+        WKApplication: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.qlsl1198.morrowwellness.watch.recovery
+            CFBundleURLSchemes:
+              - morrow
     entitlements:
       path: MorrowWatch/MorrowWatch.entitlements
+      properties:
+        aps-environment: development
+        com.apple.developer.healthkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.qlsl1198.morrowwellness.watchkitapp
@@ -55,12 +90,34 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "4"
         SKIP_INSTALL: true
+    dependencies:
+      - target: MorrowWatchWidget
+        embed: true
+  MorrowWatchWidget:
+    type: app-extension
+    platform: watchOS
+    productName: Morrow Recovery
+    sources:
+      - path: ../watch-widget/Sources
+    info:
+      path: MorrowWatchWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Morrow Recovery
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.qlsl1198.morrowwellness.watchkitapp.widget
+        PRODUCT_NAME: Morrow Recovery
+        APPLICATION_EXTENSION_API_ONLY: true
+        SKIP_INSTALL: true
 schemes:
   Morrow:
     build:
       targets:
         Morrow: all
         MorrowWatch: all
+        MorrowWatchWidget: all
     run:
       config: Debug
     archive:

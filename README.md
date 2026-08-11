@@ -8,6 +8,7 @@ Morrow의 React 웹 대시보드, SwiftUI iPhone 앱, Apple Watch 앱을 관리�
 web/      React + Vite 웹 대시보드
 ios/      SwiftUI iPhone 소스
 watch/    SwiftUI watchOS 소스
+watch-widget/ watchOS 컴플리케이션·Smart Stack 위젯 소스
 apple/    Xcode 프로젝트와 iOS·watchOS 타깃 설정
 ```
 
@@ -34,6 +35,8 @@ open apple/Morrow.xcodeproj
 ```
 
 Xcode에서 Team과 Bundle Identifier를 확인한 뒤 `Morrow` 스킴을 iPhone 또는 Watch가 연결된 iPhone 대상으로 실행합니다. 실제 기기에서 로컬 API를 사용할 때 앱 설정의 서버 주소를 `http://{Mac LAN IP}:8080/api/v1`로 지정합니다.
+
+알림이나 Watch 컴플리케이션의 `지금 회복`을 누르면 행동 타이머가 바로 열리고, 완료 뒤 `나아짐·그대로·불편`을 남기면 같은 계정의 웹·iPhone 주간 리포트와 다음 추천에 반영됩니다. `hackathon-demo` 계정의 웹 상단 `DEMO` 버튼에서는 수면 부족·오래 앉음·발표 전 긴장 시나리오를 선택해 이 전체 흐름을 확인할 수 있습니다.
 
 ## 검증
 

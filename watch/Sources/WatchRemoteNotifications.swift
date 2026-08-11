@@ -12,9 +12,9 @@ struct WatchServerConnection: Codable {
 final class MorrowWatchExtensionDelegate: NSObject, WKExtensionDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching() {
         UNUserNotificationCenter.current().delegate = self
-        let breathe = UNNotificationAction(identifier: "START_BREATHING", title: "1분 호흡 시작", options: [.foreground])
+        let recovery = UNNotificationAction(identifier: "START_RECOVERY", title: "지금 시작", options: [.foreground])
         let checkIn = UNNotificationAction(identifier: "OPEN_CHECKIN", title: "지금 기록", options: [.foreground])
-        let category = UNNotificationCategory(identifier: "MORROW_ACTION", actions: [breathe, checkIn], intentIdentifiers: [])
+        let category = UNNotificationCategory(identifier: "MORROW_ACTION", actions: [recovery, checkIn], intentIdentifiers: [])
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
@@ -32,8 +32,15 @@ final class MorrowWatchExtensionDelegate: NSObject, WKExtensionDelegate, UNUserN
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        if response.actionIdentifier == "START_BREATHING" { UserDefaults.standard.set("BREATH", forKey: "morrow.watch.pendingAction") }
-        else if response.actionIdentifier == "OPEN_CHECKIN" { UserDefaults.standard.set("CHECKIN", forKey: "morrow.watch.pendingAction") }
+        let info = response.notification.request.content.userInfo
+        if response.actionIdentifier == "START_RECOVERY" || response.actionIdentifier == "START_BREATHING" || (response.actionIdentifier == UNNotificationDefaultActionIdentifier && info["type"] as? String == "RECOVERY") {
+            UserDefaults.standard.set("RECOVERY", forKey: "morrow.watch.pendingAction")
+            UserDefaults.standard.set(info["action"] as? String ?? "BREATH", forKey: "morrow.watch.recovery.action")
+            UserDefaults.standard.set(info["attemptId"] as? String, forKey: "morrow.watch.recovery.attemptId")
+            UserDefaults.standard.set((info["durationSeconds"] as? NSNumber)?.intValue ?? 60, forKey: "morrow.watch.recovery.duration")
+            UserDefaults.standard.set(info["reason"] as? String ?? response.notification.request.content.body, forKey: "morrow.watch.recovery.reason")
+            UserDefaults.standard.set(info["confidence"] as? String ?? "LOW", forKey: "morrow.watch.recovery.confidence")
+        } else if response.actionIdentifier == "OPEN_CHECKIN" { UserDefaults.standard.set("CHECKIN", forKey: "morrow.watch.pendingAction") }
         await MainActor.run { NotificationCenter.default.post(name: Notification.Name("morrow.watch.action"), object: nil) }
     }
 }
@@ -146,6 +153,45 @@ actor WatchAssistantClient {
         let userId: String
         let content: String
     }
+}
+
+struct WatchRecoveryAttempt: Decodable {
+    let id: UUID
+    let action: String
+    let status: String
+    let outcome: String?
+}
+
+actor WatchRecoveryClient {
+    static let shared = WatchRecoveryClient()
+
+    func create(action: String, reason: String, confidence: String) async throws -> WatchRecoveryAttempt {
+        try await request(path: "recovery-attempts", method: "POST", payload: CreateRequest(action: action, triggerType: "WATCH_STARTED", reason: reason, confidence: confidence, source: "WATCH"))
+    }
+
+    func start(id: UUID) async throws -> WatchRecoveryAttempt {
+        try await request(path: "recovery-attempts/\(id.uuidString)/start", method: "PATCH", payload: EmptyRequest())
+    }
+
+    func complete(id: UUID, outcome: String) async throws -> WatchRecoveryAttempt {
+        try await request(path: "recovery-attempts/\(id.uuidString)/complete", method: "PATCH", payload: CompleteRequest(outcome: outcome))
+    }
+
+    private func request<Payload: Encodable>(path: String, method: String, payload: Payload) async throws -> WatchRecoveryAttempt {
+        guard let connection = WatchConnectionStore.load(), let root = URL(string: connection.apiRoot) else { throw URLError(.notConnectedToInternet) }
+        var request = URLRequest(url: root.appending(path: path))
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(connection.accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
+        return try JSONDecoder().decode(WatchRecoveryAttempt.self, from: data)
+    }
+
+    private struct CreateRequest: Encodable { let action, triggerType, reason, confidence, source: String }
+    private struct CompleteRequest: Encodable { let outcome: String }
+    private struct EmptyRequest: Encodable {}
 }
 
 enum WatchConnectionStore {

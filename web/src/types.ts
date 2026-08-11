@@ -33,6 +33,11 @@ export type WeeklyReport={
  dailyScores:{date:string;score:number|null;checkInCount:number}[];
  patterns:string[];
  insights:string;
+ suggestedRecoveryCount:number;
+ completedRecoveryCount:number;
+ recoveryHelpfulRate:number;
+ topHelpfulAction:string|null;
+ recoveryInsight:string;
 };
 
 export type CheckInStatus='OK'|'TENSE'|'TIRED'|'LOW_FOCUS'|'UNCOMFORTABLE';

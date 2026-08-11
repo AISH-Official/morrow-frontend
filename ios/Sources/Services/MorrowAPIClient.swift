@@ -61,6 +61,28 @@ struct AIProactiveInsight: Decodable {
     let reason: String
 }
 
+struct NativeRecoveryAttempt: Decodable, Identifiable {
+    let id: UUID
+    let action: String
+    let triggerType: String
+    let reason: String
+    let confidence: String
+    let source: String
+    let status: String
+    let outcome: String?
+}
+
+struct NativeWeeklyReport: Decodable {
+    let totalCheckIns: Int
+    let improvementRate: Double
+    let changeFromPrevious: Double
+    let suggestedRecoveryCount: Int
+    let completedRecoveryCount: Int
+    let recoveryHelpfulRate: Double
+    let topHelpfulAction: String?
+    let recoveryInsight: String
+}
+
 private struct AIHealthConsentResponse: Decodable { let consent: Bool }
 
 enum MorrowRuntimeConfiguration {
@@ -162,6 +184,28 @@ actor MorrowAPIClient {
         return try await sendAndDecode(
             ProactiveInsightRequest(userId: credentials.userId),
             path: "assistant/proactive-insight"
+        )
+    }
+
+    func createRecoveryAttempt(action: String, triggerType: String, reason: String, confidence: String, source: String = "IPHONE") async throws -> NativeRecoveryAttempt {
+        try await sendAndDecode(RecoveryCreateRequest(action: action, triggerType: triggerType, reason: reason, confidence: confidence, source: source), path: "recovery-attempts")
+    }
+
+    func startRecoveryAttempt(_ id: UUID) async throws -> NativeRecoveryAttempt {
+        try await sendAndDecode(EmptyPayload(), path: "recovery-attempts/\(id.uuidString)/start", method: "PATCH")
+    }
+
+    func completeRecoveryAttempt(_ id: UUID, outcome: String) async throws -> NativeRecoveryAttempt {
+        try await sendAndDecode(RecoveryCompleteRequest(outcome: outcome), path: "recovery-attempts/\(id.uuidString)/complete", method: "PATCH")
+    }
+
+    func weeklyReport() async throws -> NativeWeeklyReport { try await getAndDecode(path: "reports/weekly") }
+
+    func addPersonalMemory(type: String, summary: String) async throws {
+        let credentials = try await credentials()
+        try await send(
+            PersonalMemoryRequest(userId: credentials.userId, type: type, summary: summary),
+            path: "personalization/memories"
         )
     }
 
@@ -304,12 +348,13 @@ actor MorrowAPIClient {
     private func sendAndDecode<Body: Encodable, Response: Decodable>(
         _ value: Body,
         path: String,
+        method: String = "POST",
         canRefresh: Bool = true
     ) async throws -> Response {
         let credentials = try await credentials()
         guard let root = MorrowRuntimeConfiguration.apiRoot else { throw URLError(.badURL) }
         var request = URLRequest(url: root.appending(path: path))
-        request.httpMethod = "POST"
+        request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
         request.httpBody = try encoder.encode(value)
@@ -317,7 +362,7 @@ actor MorrowAPIClient {
         if canRefresh, let http = response as? HTTPURLResponse, http.statusCode == 401 {
             cachedCredentials = nil
             DeviceCredentialStore.clear()
-            return try await sendAndDecode(value, path: path, canRefresh: false)
+            return try await sendAndDecode(value, path: path, method: method, canRefresh: false)
         }
         try validate(response)
         return try decoder.decode(Response.self, from: data)
@@ -351,6 +396,9 @@ actor MorrowAPIClient {
     private struct AccountLoginRequest: Encodable { let accountId, deviceId, deviceName, platform: String }
     private struct EmptyPayload: Encodable {}
     private struct AIHealthConsentRequest: Encodable { let consent: Bool }
+    private struct RecoveryCreateRequest: Encodable { let action, triggerType, reason, confidence, source: String }
+    private struct RecoveryCompleteRequest: Encodable { let outcome: String }
+    private struct PersonalMemoryRequest: Encodable { let userId, type, summary: String }
 }
 
 enum MorrowAuthenticationError: Error { case loginRequired }

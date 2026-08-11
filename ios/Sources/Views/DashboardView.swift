@@ -36,6 +36,15 @@ struct DashboardView: View {
                         RecommendationCard(title: "지금 상태를 기록해 보세요", rationale: "30초 체크인을 남기면 오늘의 흐름에 맞는 행동을 제안해 드려요.")
                     }
 
+                    HStack(spacing: 10) {
+                        NavigationLink(destination: RecoveryActionView()) {
+                            dashboardAction("지금 1분 회복", "바로 실행", "wind", Theme.mint)
+                        }
+                        NavigationLink(destination: RecoveryEffectReportView()) {
+                            dashboardAction("회복 효과", "이번 주 학습", "chart.xyaxis.line", Theme.accent)
+                        }
+                    }
+
                     NavigationLink(destination: AssistantView()) {
                         HStack(spacing: 13) {
                             Image(systemName: "sparkles")
@@ -151,6 +160,14 @@ struct DashboardView: View {
                 }
             }
         }
+    }
+
+    private func dashboardAction(_ title: String, _ subtitle: String, _ icon: String, _ tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).font(.title3).foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 2) { Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary); Text(subtitle).font(.caption2).foregroundStyle(Theme.textMuted) }
+            Spacer()
+        }.padding(13).frame(maxWidth: .infinity).morrowPanel(cornerRadius: 14)
     }
 
     private var footer: some View {

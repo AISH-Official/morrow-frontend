@@ -102,7 +102,10 @@ function normalizeDashboard(value:Dashboard):Dashboard{
 
 export async function getDashboard():Promise<Dashboard>{return normalizeDashboard(await request<Dashboard>(await userPath('/dashboard')))}
 
-export async function getWeeklyReport():Promise<WeeklyReport>{return request<WeeklyReport>(await userPath('/reports/weekly'))}
+export async function getWeeklyReport():Promise<WeeklyReport>{
+ const value=await request<WeeklyReport>(await userPath('/reports/weekly'));
+ return{...value,suggestedRecoveryCount:value.suggestedRecoveryCount??0,completedRecoveryCount:value.completedRecoveryCount??0,recoveryHelpfulRate:value.recoveryHelpfulRate??0,topHelpfulAction:value.topHelpfulAction??null,recoveryInsight:value.recoveryInsight??'회복 행동 뒤 효과를 남기면 다음 추천이 달라져요.'};
+}
 
 export async function sendAssistantMessage(content:string):Promise<AssistantResult>{
  try{
@@ -124,11 +127,11 @@ export async function revokeConnectedDevice(id:string):Promise<void>{await reque
 export async function getAiHealthConsent():Promise<boolean>{return(await request<{consent:boolean}>('/privacy/ai-health-consent')).consent}
 export async function setAiHealthConsent(consent:boolean):Promise<boolean>{return(await request<{consent:boolean}>('/privacy/ai-health-consent',{method:'PATCH',body:JSON.stringify({consent})})).consent}
 export async function exportAccountData():Promise<unknown>{
- const[dashboard,weekly,personalization,devices,consent,checkIns,messages]=await Promise.all([
+ const[dashboard,weekly,personalization,devices,consent,checkIns,messages,recoveryAttempts]=await Promise.all([
   getDashboard(),getWeeklyReport(),getPersonalization(),getConnectedDevices(),getAiHealthConsent(),
-  request<unknown[]>(await userPath('/check-ins')),request<unknown[]>(await userPath('/assistant/messages'))
+  request<unknown[]>(await userPath('/check-ins')),request<unknown[]>(await userPath('/assistant/messages')),request<unknown[]>(await userPath('/recovery-attempts'))
  ]);
- return{exportedAt:new Date().toISOString(),dashboard,weekly,personalization,devices,aiHealthConsent:consent,checkIns,messages};
+ return{exportedAt:new Date().toISOString(),dashboard,weekly,personalization,devices,aiHealthConsent:consent,checkIns,messages,recoveryAttempts};
 }
 
 export async function rebuildPersonalization():Promise<PersonalizationProfile>{return request<PersonalizationProfile>(await userPath('/personalization/rebuild'),{method:'POST'})}
@@ -143,6 +146,19 @@ export async function createCheckIn(input:CheckInInput):Promise<{id:string}>{
 export async function submitRecommendationFeedback(id:string,helpful:boolean):Promise<void>{
  if(id.startsWith('walk-'))return;
  await request(`/recommendations/${id}/feedback`,{method:'POST',body:JSON.stringify({completed:true,helpful,note:helpful?'도움이 됐어요':'다른 제안이 필요해요'})});
+}
+
+export type RecoveryAction='BREATH'|'WALK'|'WATER_WALK'|'STRETCH'|'FOCUS'|'SCREEN_BREAK';
+export async function createRecoveryAttempt(action:RecoveryAction,reason:string,confidence:string):Promise<{id:string}>{
+ return request<{id:string}>('/recovery-attempts',{method:'POST',body:JSON.stringify({action,triggerType:'WEB_STARTED',reason,confidence,source:'WEB'})});
+}
+export async function completeRecoveryAttempt(id:string,outcome:'IMPROVED'|'SAME'|'WORSE'):Promise<void>{
+ await request(`/recovery-attempts/${id}/complete`,{method:'PATCH',body:JSON.stringify({outcome})});
+}
+
+export type DemoScenario='SHORT_SLEEP'|'SEDENTARY'|'TENSION';
+export async function applyDemoScenario(scenario:DemoScenario):Promise<{title:string;summary:string}>{
+ return request<{title:string;summary:string}>(`/demo/scenarios/${scenario}`,{method:'POST'});
 }
 
 export async function clearWellnessData():Promise<void>{

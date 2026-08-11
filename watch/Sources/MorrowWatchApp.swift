@@ -129,6 +129,7 @@ final class WatchNotificationManager: ObservableObject {
         let last = UserDefaults.standard.object(forKey: key) as? Date ?? .distantPast
         guard Date().timeIntervalSince(last) > 6 * 60 * 60 else { return }
         let content = UNMutableNotificationContent(); content.title = "회복 신호가 높아요"; content.body = "1분 호흡 세션을 시작해 보세요."; content.sound = .default
+        content.userInfo = ["type": "RECOVERY", "action": "BREATH", "durationSeconds": 60, "reason": "회복 부하가 평소보다 높아요.", "confidence": "MEDIUM"]
         content.categoryIdentifier = "MORROW_ACTION"
         try? await center.add(UNNotificationRequest(identifier: "morrow.watch.recovery", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)))
         UserDefaults.standard.set(Date(), forKey: key)
@@ -142,7 +143,8 @@ final class WatchNotificationManager: ObservableObject {
         content.title = title
         content.body = body
         content.sound = .default
-        content.userInfo = ["type": "AI_INSIGHT"]
+        let metadata = recoveryMetadata(title + " " + body)
+        content.userInfo = ["type": "RECOVERY", "action": metadata.action, "durationSeconds": metadata.duration, "reason": body, "confidence": "AI"]
         content.categoryIdentifier = "MORROW_ACTION"
         let request = UNNotificationRequest(
             identifier: "morrow.watch.ai.\(Int(generatedAt.timeIntervalSince1970))",
@@ -159,6 +161,17 @@ final class WatchNotificationManager: ObservableObject {
 
     private func weeklyAction(_ id: String, _ weekday: Int, _ hour: Int, _ minute: Int, _ title: String, _ body: String) async {
         let content = UNMutableNotificationContent(); content.title = title; content.body = body; content.sound = .default; content.categoryIdentifier = "MORROW_ACTION"
+        let metadata = recoveryMetadata(title + " " + body)
+        content.userInfo = ["type": "RECOVERY", "action": metadata.action, "durationSeconds": metadata.duration, "reason": body, "confidence": "ROUTINE"]
         try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute, weekday: weekday), repeats: true)))
+    }
+
+    private func recoveryMetadata(_ text: String) -> (action: String, duration: Int) {
+        if text.contains("걷") { return ("WALK", 300) }
+        if text.contains("스트레칭") || text.contains("어깨") { return ("STRETCH", 180) }
+        if text.contains("집중") || text.contains("할 일") { return ("FOCUS", 300) }
+        if text.contains("화면") || text.contains("눈") { return ("SCREEN_BREAK", 60) }
+        if text.contains("물") { return ("WATER_WALK", 180) }
+        return ("BREATH", 60)
     }
 }

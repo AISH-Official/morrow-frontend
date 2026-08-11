@@ -46,7 +46,7 @@ struct WatchCheckInView: View {
             .containerBackground(.black, for: .navigation)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { route in
-                if route == "BREATH" { RecoverySessionView(autoStart: true) }
+                if route == "RECOVERY" { RecoverySessionView(autoStart: true, launch: .pending()) }
                 else { QuickCheckInView() }
             }
         }
@@ -59,6 +59,7 @@ struct WatchCheckInView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { openPendingNotificationAction() } }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("morrow.watch.action"))) { _ in openPendingNotificationAction() }
         .onAppear { openPendingNotificationAction() }
+        .onOpenURL { url in if url.host == "recovery" { notificationPath = ["RECOVERY"] } }
     }
 
     private func openPendingNotificationAction() {
@@ -133,7 +134,7 @@ struct WatchCheckInView: View {
     private var actionGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)], spacing: 7) {
             NavigationLink(destination: QuickCheckInView()) { action("체크인", "plus.circle.fill", WatchTheme.accent) }.buttonStyle(.plain)
-            NavigationLink(destination: RecoverySessionView()) { action("1분 회복", "wind", WatchTheme.mint) }.buttonStyle(.plain)
+            NavigationLink(destination: RecoverySessionView(launch: .breath)) { action("1분 회복", "wind", WatchTheme.mint) }.buttonStyle(.plain)
             NavigationLink(destination: WatchAssistantView()) { action("AI 대화", "sparkles", WatchTheme.accent) }.buttonStyle(.plain)
             Button {
                 Task { await health.requestAuthorizationAndLoad(); session.sendHealthSummary(health.snapshot) }
@@ -296,34 +297,102 @@ private struct QuickCheckInView: View {
     }
 }
 
+private struct RecoveryLaunchContext {
+    let action: String
+    let reason: String
+    let confidence: String
+    let durationSeconds: Int
+    let attemptId: UUID?
+
+    static let breath = RecoveryLaunchContext(action: "BREATH", reason: "지금 손목에서 시작한 1분 회복이에요.", confidence: "USER", durationSeconds: 60, attemptId: nil)
+    static func pending() -> RecoveryLaunchContext {
+        let defaults = UserDefaults.standard
+        let storedDuration = defaults.integer(forKey: "morrow.watch.recovery.duration")
+        let value = RecoveryLaunchContext(
+            action: defaults.string(forKey: "morrow.watch.recovery.action") ?? "BREATH",
+            reason: defaults.string(forKey: "morrow.watch.recovery.reason") ?? "최근 흐름에 맞춰 제안한 회복 행동이에요.",
+            confidence: defaults.string(forKey: "morrow.watch.recovery.confidence") ?? "LOW",
+            durationSeconds: storedDuration > 0 ? max(30, storedDuration) : 60,
+            attemptId: defaults.string(forKey: "morrow.watch.recovery.attemptId").flatMap(UUID.init(uuidString:))
+        )
+        ["morrow.watch.recovery.action", "morrow.watch.recovery.reason", "morrow.watch.recovery.confidence", "morrow.watch.recovery.duration", "morrow.watch.recovery.attemptId"].forEach { defaults.removeObject(forKey: $0) }
+        return value
+    }
+    var title: String { switch action { case "WALK": "5분 걷기"; case "WATER_WALK": "물 한 잔 + 걷기"; case "STRETCH": "3분 스트레칭"; case "FOCUS": "5분 집중"; case "SCREEN_BREAK": "화면 휴식"; default: "1분 호흡" } }
+    var icon: String { switch action { case "WALK", "WATER_WALK": "figure.walk"; case "STRETCH": "figure.flexibility"; case "FOCUS": "scope"; case "SCREEN_BREAK": "eye"; default: "wind" } }
+    var cue: String { switch action { case "WALK": "편한 속도로 걷기"; case "WATER_WALK": "물 한 잔 뒤 천천히 걷기"; case "STRETCH": "목과 어깨 천천히 풀기"; case "FOCUS": "한 가지 일만 시작하기"; case "SCREEN_BREAK": "먼 곳을 바라보기"; default: "길게 내쉬기" } }
+}
+
 private struct RecoverySessionView: View {
-    var autoStart = false
-    @State private var remaining = 60
+    let autoStart: Bool
+    let launch: RecoveryLaunchContext
+    @State private var remaining: Int
     @State private var running = false
+    @State private var attemptId: UUID?
+    @State private var resultMessage = ""
+    @State private var isSubmitting = false
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    init(autoStart: Bool = false, launch: RecoveryLaunchContext = .breath) {
+        self.autoStart = autoStart
+        self.launch = launch
+        _remaining = State(initialValue: max(30, launch.durationSeconds))
+        _attemptId = State(initialValue: launch.attemptId)
+    }
+
     var body: some View {
-        VStack(spacing: 12) {
-            Text("RESET SESSION").font(.system(size: 8, weight: .semibold, design: .monospaced)).tracking(1.2).foregroundStyle(WatchTheme.muted)
-            ZStack {
-                Circle().stroke(WatchTheme.mint.opacity(0.12), lineWidth: 9)
-                Circle().trim(from: 0, to: Double(60 - remaining) / 60).stroke(WatchTheme.mint, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90)).animation(.linear, value: remaining)
-                VStack { Text("\(remaining)").font(.system(size: 30, weight: .medium, design: .monospaced)); Text(running ? breathCue : "1분 회복").font(.caption2).foregroundStyle(WatchTheme.muted) }
-            }.frame(width: 112, height: 112)
-            Button(running ? "잠시 멈춤" : remaining == 0 ? "다시 시작" : "시작") {
-                if remaining == 0 { remaining = 60 }
-                running.toggle(); WKInterfaceDevice.current().play(.click)
-            }.buttonStyle(.borderedProminent).tint(WatchTheme.mint)
+        ScrollView {
+            VStack(spacing: 10) {
+                Label(launch.title, systemImage: launch.icon).font(.system(size: 9, weight: .semibold, design: .monospaced)).foregroundStyle(WatchTheme.mint)
+                Text(launch.reason).font(.system(size: 9)).foregroundStyle(WatchTheme.muted).multilineTextAlignment(.center).lineLimit(3)
+                ZStack {
+                    Circle().stroke(WatchTheme.mint.opacity(0.12), lineWidth: 9)
+                    Circle().trim(from: 0, to: progress).stroke(WatchTheme.mint, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90)).animation(.linear, value: remaining)
+                    VStack { Text("\(remaining)").font(.system(size: 28, weight: .medium, design: .monospaced)); Text(running ? activeCue : launch.title).font(.caption2).foregroundStyle(WatchTheme.muted).multilineTextAlignment(.center) }
+                }.frame(width: 108, height: 108)
+                if remaining > 0 {
+                    Button(running ? "잠시 멈춤" : "시작") { running.toggle(); WKInterfaceDevice.current().play(.click) }.buttonStyle(.borderedProminent).tint(WatchTheme.mint)
+                } else if resultMessage.isEmpty {
+                    Text("조금 나아졌나요?").font(.headline)
+                    HStack(spacing: 5) {
+                        outcomeButton("나아짐", "IMPROVED", WatchTheme.mint)
+                        outcomeButton("그대로", "SAME", WatchTheme.accent)
+                        outcomeButton("불편", "WORSE", .orange)
+                    }
+                } else {
+                    Label(resultMessage, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(WatchTheme.mint).multilineTextAlignment(.center)
+                }
+            }
         }
         .onReceive(timer) { _ in
             guard running, remaining > 0 else { return }
             remaining -= 1
             if remaining == 0 { running = false; WKInterfaceDevice.current().play(.success) }
-            else if remaining % 4 == 0 { WKInterfaceDevice.current().play(.directionUp) }
+            else if launch.action == "BREATH", remaining % 4 == 0 { WKInterfaceDevice.current().play(.directionUp) }
         }
-        .onAppear { if autoStart { running = true } }
-        .navigationTitle("1분 회복")
+        .task { await prepareAttempt(); if autoStart { running = true } }
+        .navigationTitle(launch.title)
     }
 
-    private var breathCue: String { ((60 - remaining) / 4).isMultiple(of: 2) ? "천천히 들이쉬기" : "길게 내쉬기" }
+    private var progress: Double { Double(max(0, launch.durationSeconds - remaining)) / Double(max(1, launch.durationSeconds)) }
+    private var activeCue: String { launch.action == "BREATH" ? (((launch.durationSeconds - remaining) / 4).isMultiple(of: 2) ? "천천히 들이쉬기" : "길게 내쉬기") : launch.cue }
+    private func outcomeButton(_ title: String, _ outcome: String, _ tint: Color) -> some View {
+        Button(title) { Task { await submit(outcome) } }.buttonStyle(.bordered).tint(tint).font(.system(size: 9)).disabled(isSubmitting)
+    }
+    @MainActor private func prepareAttempt() async {
+        guard !isSubmitting else { return }
+        isSubmitting = true
+        defer { isSubmitting = false }
+        do {
+            if let attemptId { _ = try await WatchRecoveryClient.shared.start(id: attemptId) }
+            else { attemptId = try await WatchRecoveryClient.shared.create(action: launch.action, reason: launch.reason, confidence: launch.confidence).id }
+        } catch {}
+    }
+    @MainActor private func submit(_ outcome: String) async {
+        isSubmitting = true
+        defer { isSubmitting = false }
+        if let attemptId { _ = try? await WatchRecoveryClient.shared.complete(id: attemptId, outcome: outcome) }
+        resultMessage = outcome == "IMPROVED" ? "이 방법을 다음에도 우선할게요" : outcome == "SAME" ? "다음에는 다른 방법을 시험할게요" : "이 행동은 다음 추천에서 피할게요"
+        WKInterfaceDevice.current().play(outcome == "IMPROVED" ? .success : .click)
+    }
 }

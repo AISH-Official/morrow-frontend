@@ -8,6 +8,7 @@ struct SettingsView: View {
     @EnvironmentObject private var notifications: PhoneNotificationManager
     @AppStorage("morrow.sync.derivedHealth") private var syncDerivedHealth = true
     @AppStorage("morrow.notifications.enabled") private var notificationsEnabled = true
+    @AppStorage("morrow.primaryRecoveryContext") private var primaryRecoveryContext = ""
     @State private var showDeleteConfirmation = false
     @State private var showLogoutConfirmation = false
     @State private var isLoggingOut = false
@@ -19,6 +20,26 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("나의 회복 상황") {
+                Text("Morrow가 먼저 살필 상황을 하나 고르면 알림과 회복 행동의 우선순위를 여기에 맞춥니다.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                ForEach(recoveryContexts, id: \.self) { context in
+                    Button {
+                        saveRecoveryContext(context)
+                    } label: {
+                        HStack {
+                            Text(context)
+                            Spacer()
+                            if primaryRecoveryContext == context {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(Theme.accent)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
             Section("기기 연동") {
                 Toggle("웹과 파생 웰니스 요약 동기화", isOn: $syncDerivedHealth)
                 LabeledContent("연결 상태", value: syncService.statusText)
@@ -114,6 +135,21 @@ struct SettingsView: View {
         Task {
             await MorrowAPIClient.shared.resetForServerChange()
             await loadConnection()
+        }
+    }
+
+    private var recoveryContexts: [String] {
+        ["수면이 부족한 아침", "업무·학업 집중 저하", "오래 앉아 있을 때", "발표·회의 전 긴장"]
+    }
+
+    private func saveRecoveryContext(_ context: String) {
+        guard primaryRecoveryContext != context else { return }
+        primaryRecoveryContext = context
+        Task {
+            try? await MorrowAPIClient.shared.addPersonalMemory(
+                type: "GOAL",
+                summary: "주요 회복 상황: \(context)"
+            )
         }
     }
 

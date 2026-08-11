@@ -4,10 +4,10 @@ import UserNotifications
 final class MorrowAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        let breathe = UNNotificationAction(identifier: "START_BREATHING", title: "1분 호흡 시작", options: [.foreground])
+        let recovery = UNNotificationAction(identifier: "START_RECOVERY", title: "지금 시작", options: [.foreground])
         let checkIn = UNNotificationAction(identifier: "OPEN_CHECKIN", title: "지금 기록", options: [.foreground])
         UNUserNotificationCenter.current().setNotificationCategories([
-            UNNotificationCategory(identifier: "MORROW_ACTION", actions: [breathe, checkIn], intentIdentifiers: [])
+            UNNotificationCategory(identifier: "MORROW_ACTION", actions: [recovery, checkIn], intentIdentifiers: [])
         ])
         return true
     }
@@ -27,7 +27,15 @@ final class MorrowAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        if response.actionIdentifier == "START_BREATHING" { UserDefaults.standard.set("BREATH", forKey: "morrow.phone.pendingAction") }
-        else if response.actionIdentifier == "OPEN_CHECKIN" { UserDefaults.standard.set("CHECKIN", forKey: "morrow.phone.pendingAction") }
+        let info = response.notification.request.content.userInfo
+        if response.actionIdentifier == "START_RECOVERY" || response.actionIdentifier == "START_BREATHING" || (response.actionIdentifier == UNNotificationDefaultActionIdentifier && info["type"] as? String == "RECOVERY") {
+            UserDefaults.standard.set("RECOVERY", forKey: "morrow.phone.pendingAction")
+            UserDefaults.standard.set(info["action"] as? String ?? "BREATH", forKey: "morrow.phone.recovery.action")
+            UserDefaults.standard.set(info["attemptId"] as? String, forKey: "morrow.phone.recovery.attemptId")
+            UserDefaults.standard.set((info["durationSeconds"] as? NSNumber)?.intValue ?? 60, forKey: "morrow.phone.recovery.duration")
+            UserDefaults.standard.set(info["reason"] as? String ?? response.notification.request.content.body, forKey: "morrow.phone.recovery.reason")
+            UserDefaults.standard.set(info["confidence"] as? String ?? "LOW", forKey: "morrow.phone.recovery.confidence")
+        } else if response.actionIdentifier == "OPEN_CHECKIN" { UserDefaults.standard.set("CHECKIN", forKey: "morrow.phone.pendingAction") }
+        await MainActor.run { NotificationCenter.default.post(name: Notification.Name("morrow.phone.action"), object: nil) }
     }
 }

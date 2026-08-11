@@ -15,15 +15,11 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
+	<string>1.0</string>
 	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Morrow는 수면, 걸음, 심박, HRV, 활동, 호흡 데이터를 읽어 개인 웰니스 요약과 기기 간 동기화를 제공합니다.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>Morrow는 건강 데이터 권한을 안전하게 관리하기 위해 HealthKit 접근을 사용하며 건강 데이터를 추가하거나 변경하지 않습니다.</string>
 	<key>MORROW_API_BASE_URL</key>
 	<string>https://9x4mms7o9g.execute-api.ap-southeast-2.amazonaws.com/api/v1</string>
 	<key>MORROW_USER_ID</key>
@@ -43,11 +39,15 @@
 			</dict>
 		</dict>
 	</dict>
-	<key>UILaunchScreen</key>
-	<dict/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Morrow는 수면, 걸음, 심박, HRV, 활동, 호흡 데이터를 읽어 개인 웰니스 요약과 기기 간 동기화를 제공합니다.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Morrow는 건강 데이터 권한을 안전하게 관리하기 위해 HealthKit 접근을 사용하며 건강 데이터를 추가하거나 변경하지 않습니다.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
 </dict>
 </plist>

@@ -134,12 +134,14 @@ private struct AuthenticatedRootView: View {
     @AppStorage("morrow.sync.derivedHealth") private var syncDerivedHealth = true
     @AppStorage("morrow.notifications.enabled") private var notificationsEnabled = true
     @StateObject private var watchReceiver = WatchSessionReceiver()
+    @State private var pendingRecovery: PhoneRecoveryLaunch?
+    @State private var showNotificationCheckIn = false
     private let analyzer = BaselineAnalyzer()
 
     var body: some View {
         DashboardView(onLogout: logout)
             .onAppear {
-                watchReceiver.activate(); importWatchCheckIns(); syncWatchContext()
+                watchReceiver.activate(); importWatchCheckIns(); syncWatchContext(); handlePendingNotificationAction()
                 Task { await configureNotifications(); await synchronize() }
             }
             .onChange(of: watchReceiver.inboxVersion) { _, _ in importWatchCheckIns() }
@@ -147,7 +149,10 @@ private struct AuthenticatedRootView: View {
             .onChange(of: healthSignature) { _, _ in syncWatchContext(); Task { await synchronize() } }
             .onChange(of: checkInSignature) { _, _ in Task { await synchronize() } }
             .onChange(of: syncService.recoveryScore) { _, _ in syncWatchContext() }
-            .onChange(of: scenePhase) { _, phase in if phase == .active { importWatchCheckIns(); syncWatchContext(); Task { await synchronize() } } }
+            .onChange(of: scenePhase) { _, phase in if phase == .active { importWatchCheckIns(); syncWatchContext(); handlePendingNotificationAction(); Task { await synchronize() } } }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("morrow.phone.action"))) { _ in handlePendingNotificationAction() }
+            .sheet(item: $pendingRecovery) { RecoveryActionView(launch: $0) }
+            .sheet(isPresented: $showNotificationCheckIn) { NavigationStack { CheckInView() } }
     }
 
     @MainActor
@@ -167,6 +172,13 @@ private struct AuthenticatedRootView: View {
         }
         try? modelContext.save()
         Task { await synchronize() }
+    }
+
+    private func handlePendingNotificationAction() {
+        guard let action = UserDefaults.standard.string(forKey: "morrow.phone.pendingAction") else { return }
+        UserDefaults.standard.removeObject(forKey: "morrow.phone.pendingAction")
+        if action == "RECOVERY" { pendingRecovery = .pending() }
+        else if action == "CHECKIN" { showNotificationCheckIn = true }
     }
 
     private func importWatchHealth() {
@@ -378,6 +390,7 @@ final class PhoneNotificationManager: ObservableObject {
         content.body = "회복 부하가 높아요. 7분 가볍게 걷거나 1분 호흡으로 리듬을 낮춰보세요."
         content.sound = .default
         content.categoryIdentifier = "MORROW_ACTION"
+        content.userInfo = ["type": "RECOVERY", "action": "BREATH", "durationSeconds": 60, "reason": summary, "confidence": "MEDIUM"]
         try? await center.add(UNNotificationRequest(identifier: "morrow.recovery", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)))
         UserDefaults.standard.set(Date(), forKey: key)
     }
@@ -394,7 +407,8 @@ final class PhoneNotificationManager: ObservableObject {
         content.title = insight.title
         content.body = insight.body
         content.sound = .default
-        content.userInfo = ["type": "AI_INSIGHT", "reason": insight.reason]
+        let metadata = recoveryMetadata(insight.title + " " + insight.body)
+        content.userInfo = ["type": "RECOVERY", "action": metadata.action, "durationSeconds": metadata.duration, "reason": insight.reason, "confidence": "AI"]
         content.categoryIdentifier = "MORROW_ACTION"
         let request = UNNotificationRequest(
             identifier: "morrow.ai.insight.\(Int(Date().timeIntervalSince1970))",
@@ -425,7 +439,18 @@ final class PhoneNotificationManager: ObservableObject {
 
     private func scheduleWeekly(identifier: String, weekday: Int, hour: Int, minute: Int, title: String, body: String) async {
         let content = UNMutableNotificationContent(); content.title = title; content.body = body; content.sound = .default; content.categoryIdentifier = "MORROW_ACTION"
+        let metadata = recoveryMetadata(title + " " + body)
+        content.userInfo = ["type": "RECOVERY", "action": metadata.action, "durationSeconds": metadata.duration, "reason": body, "confidence": "ROUTINE"]
         let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute, weekday: weekday), repeats: true)
         try? await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
+    }
+
+    private func recoveryMetadata(_ text: String) -> (action: String, duration: Int) {
+        if text.contains("걷") { return ("WALK", 300) }
+        if text.contains("스트레칭") || text.contains("어깨") { return ("STRETCH", 180) }
+        if text.contains("집중") || text.contains("할 일") { return ("FOCUS", 300) }
+        if text.contains("화면") || text.contains("눈") { return ("SCREEN_BREAK", 60) }
+        if text.contains("물") { return ("WATER_WALK", 180) }
+        return ("BREATH", 60)
     }
 }
