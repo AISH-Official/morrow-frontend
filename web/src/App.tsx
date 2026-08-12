@@ -1,10 +1,10 @@
 import{FormEvent,useEffect,useMemo,useRef,useState}from'react';
 import{Activity,Archive,BarChart3,BrainCircuit,Check,ChevronRight,Command,Footprints,HeartPulse,History,LockKeyhole,LogOut,Mic,MicOff,MoonStar,Plus,RefreshCw,Send,Settings2,ShieldCheck,Signal,Sparkles,ThumbsDown,Trash2,Volume2,VolumeX,Watch,X}from'lucide-react';
 import{ApiRequestError,addPersonalMemory,applyDemoScenario,clearAssistantConversation,clearWellnessData,completeRecoveryAttempt,createCheckIn,createRecoveryAttempt,deleteAccountCompletely,exportAccountData,getAiHealthConsent,getConnectedDevices,getDashboard,getPersonalization,getStoredWebSession,getWeeklyReport,isSessionExpired,loginWebSession,logoutWebSession,pairWebSession,rebuildPersonalization,revokeConnectedDevice,sendAssistantMessage,setAiHealthConsent,signupWebSession,submitRecommendationFeedback}from'./api';
-import type{DemoScenario,RecoveryAction}from'./api';
+import type{DemoScenario}from'./api';
 import type{WebSession}from'./api';
 import type{ConnectedDevice}from'./api';
-import type{CheckInCause,CheckInInput,CheckInStatus,ConnectionMode,Dashboard,PersonalizationProfile,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
+import type{CheckInCause,CheckInInput,CheckInStatus,ConnectionMode,Dashboard,PersonalizationProfile,RecoveryAction,Recommendation,TimelineItem,TimelineKind,UserMemory,WeeklyReport}from'./types';
 
 type Role='ai'|'user';
 type Phase='idle'|'listening'|'thinking'|'speaking';
@@ -142,7 +142,7 @@ export default function App(){
   try{await submitRecommendationFeedback(dashboard.recommendation.id,helpful);const personal=await getPersonalization();setPersonalization(personal.profile);setMemories(personal.memories)}catch(error){if(isSessionExpired(error))expireSession();else{setMode('offline');setToast('피드백을 저장하지 못했습니다.');}return}
   setFeedbackDone(true);setToast(helpful?'좋아요. 이 회복 방법을 더 잘 기억할게요.':'알겠어요. 다음에는 다른 방법을 제안할게요.');
   const now=new Date();
-  const recovery:TimelineItem={id:`feedback-${Date.now()}`,time:now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}),title:'회복 활동 피드백',detail:helpful?'짧은 걷기가 도움이 됐어요.':'이번 추천은 도움이 되지 않았어요.',kind:'recovery',userConfirmed:true};
+  const recovery:TimelineItem={id:`feedback-${Date.now()}`,time:now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}),title:'회복 활동 피드백',detail:helpful?`${dashboard.recommendation.title} 실행 후 도움이 됐어요.`:'이번 추천은 도움이 되지 않았어요.',kind:'recovery',userConfirmed:true};
   setDashboard(value=>value?{...value,timeline:[...value.timeline,recovery]}:value);
  }
 
@@ -195,7 +195,7 @@ export default function App(){
   </main>
   <footer><span>WELLNESS SUPPORT — NOT MEDICAL DIAGNOSIS</span><span className="session"><i/> {mode==='live'?'API CONNECTED':'LAST SAVED DATA'}</span></footer>
   {checkInOpen&&<CheckInModal userId={account?.userId??'pending-user'} onClose={()=>setCheckInOpen(false)} onSave={saveCheckIn}/>}
-  {recoveryOpen&&dashboard&&<RecoveryModal action={actionForRecommendation(dashboard.recommendation?.title)} reason={dashboard.recommendation?.rationale??dashboard.scoreReasons?.[0]??'최근 개인 기준에서 회복 행동이 필요해 보여요.'} confidence={dashboard.scoreConfidence} onClose={()=>setRecoveryOpen(false)} onComplete={outcome=>{setRecoveryOpen(false);void feedback(outcome==='IMPROVED')}}/>}
+  {recoveryOpen&&dashboard&&<RecoveryModal action={actionForRecommendation(dashboard.recommendation)} title={dashboard.recommendation?.title} durationSeconds={dashboard.recommendation?.durationSeconds??durationForRecommendation(dashboard.recommendation?.title)} reason={dashboard.recommendation?.rationale??dashboard.scoreReasons?.[0]??'최근 개인 기준에서 회복 행동이 필요해 보여요.'} confidence={dashboard.scoreConfidence} onClose={()=>setRecoveryOpen(false)} onComplete={outcome=>{setRecoveryOpen(false);void feedback(outcome==='IMPROVED')}}/>}
   {demoOpen&&<DemoScenarioModal onClose={()=>setDemoOpen(false)} onApply={loadDemoScenario}/>}
   {toast&&<div className="toast" role="status"><Check/>{toast}</div>}
  </div>
@@ -220,7 +220,7 @@ function TodayView({dashboard,phase,phaseText,particles,chats,message,sound,feed
    <div className="insight-heading"><div><span>TODAY · PERSONAL BASELINE</span><h1>오늘의 회복 신호</h1></div><button onClick={onCheckIn}><Plus/> 체크인</button></div>
    <div className="score-card"><div className="score-ring" style={{'--score':`${dashboard.score*3.6}deg`} as React.CSSProperties}><div><b>{dashboard.score>0?dashboard.score:'—'}</b><span>회복 여유</span></div></div><div className="score-copy"><span className="load-badge">{dashboard.score===0?'데이터 대기':dashboard.wellnessLoad==='NORMAL'?'안정적':dashboard.wellnessLoad==='MODERATE'?'조금 높음':'평소보다 높음'}</span><h2>{dashboard.score===0?<>HealthKit 데이터를<br/>연결해 주세요.</>:<>무리하기보다<br/>리듬을 되찾아 보세요.</>}</h2><p>{dashboard.scoreReasons?.[0]??'최근 기록이 쌓이면 개인 기준선과 비교해 드려요.'}</p></div></div>
    <div className="metric-grid"><Metric icon={<MoonStar/>} label="수면" value={dashboard.metrics.sleepMinutes>0?`${sleepHours}h ${sleepMinutes}m`:'—'} trend="HealthKit 파생 요약"/><Metric icon={<HeartPulse/>} label="안정 심박" value={dashboard.metrics.restingHeartRate>0?`${dashboard.metrics.restingHeartRate} bpm`:'—'} trend="최근 동기화 값"/><Metric icon={<Activity/>} label="HRV" value={dashboard.metrics.hrv>0?`${dashboard.metrics.hrv} ms`:'—'} trend="최근 동기화 값"/><Metric icon={<Footprints/>} label="걸음" value={dashboard.metrics.steps>0?dashboard.metrics.steps.toLocaleString('ko-KR'):'—'} trend="iPhone · Watch 연동"/><Metric icon={<Activity/>} label="활동 에너지" value={dashboard.metrics.activeEnergyKcal>0?`${dashboard.metrics.activeEnergyKcal} kcal`:'—'} trend="오늘 누적"/><Metric icon={<Watch/>} label="운동" value={dashboard.metrics.exerciseMinutes>0?`${dashboard.metrics.exerciseMinutes}분`:'—'} trend="오늘 누적"/></div>
-   {dashboard.recommendation?<div className="recommendation"><div className="recommend-top"><span><Sparkles/> NEXT BEST ACTION</span><small>실행 후 효과 학습</small></div><h2>{dashboard.recommendation.title}</h2><p>{dashboard.recommendation.rationale}</p>{feedbackDone?<div className="feedback-complete"><Check/> 실행 효과를 다음 추천에 반영했어요</div>:<div className="recommend-actions"><button className="primary" onClick={onRecovery}><Sparkles/> 지금 바로 실행</button><button onClick={()=>onFeedback(false)} aria-label="다른 행동 추천"><ThumbsDown/></button></div>}</div>:<button className="empty-recommendation" onClick={onCheckIn}><Plus/> 지금 상태를 기록하면 맞춤 행동을 제안해요</button>}
+   {dashboard.recommendation?<div className="recommendation"><div className="recommend-top"><span><Sparkles/> NEXT BEST ACTION</span><small>{dashboard.recommendation.source==='AI'?'AI 맞춤':dashboard.recommendation.source==='LEARNED'?'효과 학습 반영':'상태 맞춤'} · {durationLabel(dashboard.recommendation.durationSeconds??durationForRecommendation(dashboard.recommendation.title))}</small></div><h2>{dashboard.recommendation.title}</h2><p>{dashboard.recommendation.rationale}</p>{feedbackDone?<div className="feedback-complete"><Check/> 실행 효과를 다음 추천에 반영했어요</div>:<div className="recommend-actions"><button className="primary" onClick={onRecovery}><Sparkles/> 지금 바로 실행</button><button onClick={()=>onFeedback(false)} aria-label="다른 행동 추천"><ThumbsDown/></button></div>}</div>:<button className="empty-recommendation" onClick={onCheckIn}><Plus/> 지금 상태를 기록하면 맞춤 행동을 제안해요</button>}
    <HealthDetailCard dashboard={dashboard}/>
   </aside>
   <section className="timeline-strip"><div className="strip-head"><span>TODAY'S SIGNAL STORY</span><b>{dashboard.timeline.length}개의 의미 있는 변화</b></div><div className="timeline-cards">{dashboard.timeline.slice(-3).map(item=><TimelineCard key={item.id} item={item}/>)}</div></section>
@@ -282,23 +282,29 @@ function SettingsView({account,devices,aiHealthConsent,aiHealthConsentSaving,onA
  </div>
 }
 
-function actionForRecommendation(title?:string):RecoveryAction{
- const value=title??'';
- if(value.includes('걷')||value.includes('산책'))return'WALK';
+function actionForRecommendation(recommendation?:Recommendation|null):RecoveryAction{
+ if(recommendation?.action)return recommendation.action;
+ const value=recommendation?.title??'';
+ if(value.includes('멈추')||value.includes('화면')||value.includes('눈을 쉬'))return'SCREEN_BREAK';
  if(value.includes('물'))return'WATER_WALK';
+ if(value.includes('걷')||value.includes('걸어')||value.includes('산책')||value.includes('움직'))return'WALK';
  if(value.includes('스트레칭')||value.includes('어깨'))return'STRETCH';
  if(value.includes('집중')||value.includes('할 일'))return'FOCUS';
  if(value.includes('화면')||value.includes('눈'))return'SCREEN_BREAK';
  return'BREATH';
 }
 
-function RecoveryModal({action,reason,confidence,onClose,onComplete}:{action:RecoveryAction;reason:string;confidence:string;onClose:()=>void;onComplete:(outcome:'IMPROVED'|'SAME'|'WORSE')=>void}){
- const[remaining,setRemaining]=useState(60);const[running,setRunning]=useState(false);const[attemptId,setAttemptId]=useState('');const[submitting,setSubmitting]=useState(false);
- const labels:Record<RecoveryAction,[string,string]>={BREATH:['1분 호흡','4초 들이쉬고 6초 내쉬어 보세요.'],WALK:['1분 가볍게 걷기','자리에서 일어나 편한 속도로 움직여 보세요.'],WATER_WALK:['물 한 잔과 걷기','물을 마시고 잠시 천천히 걸어보세요.'],STRETCH:['1분 스트레칭','목과 어깨부터 천천히 풀어보세요.'],FOCUS:['1분 집중 시작','방해 요소를 닫고 한 가지만 시작해 보세요.'],SCREEN_BREAK:['1분 화면 휴식','먼 곳을 바라보고 어깨 힘을 빼보세요.']};
+function durationForRecommendation(title?:string):number{const match=(title??'').match(/(\d{1,2})\s*분/);return match?Math.max(1,Math.min(30,Number(match[1])))*60:60}
+function durationLabel(seconds:number):string{const minutes=Math.floor(seconds/60);const rest=seconds%60;return rest?`${minutes}분 ${rest}초`:`${Math.max(1,minutes)}분`}
+function countdown(seconds:number):string{return`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`}
+
+function RecoveryModal({action,title,durationSeconds,reason,confidence,onClose,onComplete}:{action:RecoveryAction;title?:string;durationSeconds:number;reason:string;confidence:string;onClose:()=>void;onComplete:(outcome:'IMPROVED'|'SAME'|'WORSE')=>void}){
+ const totalDuration=Math.max(30,durationSeconds);const[remaining,setRemaining]=useState(totalDuration);const[running,setRunning]=useState(false);const[attemptId,setAttemptId]=useState('');const[submitting,setSubmitting]=useState(false);
+ const labels:Record<RecoveryAction,[string,string]>={BREATH:['호흡','4초 들이쉬고 6초 내쉬어 보세요.'],WALK:['가볍게 걷기','자리에서 일어나 편한 속도로 움직여 보세요.'],WATER_WALK:['물 한 잔과 걷기','물을 마시고 잠시 천천히 걸어보세요.'],STRETCH:['스트레칭','목과 어깨부터 천천히 풀어보세요.'],FOCUS:['집중 시작','방해 요소를 닫고 한 가지만 시작해 보세요.'],SCREEN_BREAK:['잠시 멈추기','화면과 하던 일을 잠시 멈추고 몸의 힘을 빼보세요.']};
  useEffect(()=>{let active=true;void createRecoveryAttempt(action,reason,confidence).then(value=>{if(active)setAttemptId(value.id)}).catch(()=>{});return()=>{active=false}},[action,reason,confidence]);
  useEffect(()=>{if(!running||remaining<=0)return;const timer=window.setInterval(()=>setRemaining(value=>{if(value<=1){window.clearInterval(timer);setRunning(false);return 0}return value-1}),1000);return()=>window.clearInterval(timer)},[running,remaining]);
  async function finish(outcome:'IMPROVED'|'SAME'|'WORSE'){if(submitting)return;setSubmitting(true);try{if(attemptId)await completeRecoveryAttempt(attemptId,outcome)}finally{onComplete(outcome)}}
- return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><section className="recovery-modal"><button className="modal-close" onClick={onClose} aria-label="닫기"><X/></button><span>WHY NOW · {confidence}</span><p className="recovery-reason">{reason}</p><div className="recovery-timer" style={{'--progress':`${(60-remaining)*6}deg`} as React.CSSProperties}><div><b>{remaining}</b><small>{running?'회복 중':labels[action][0]}</small></div></div>{remaining>0?<><h2>{labels[action][0]}</h2><p>{labels[action][1]}</p><button className="recovery-start" onClick={()=>setRunning(value=>!value)}>{running?'잠시 멈춤':'지금 시작'}</button></>:<><h2>실행 전보다 조금 나아졌나요?</h2><div className="recovery-outcomes"><button disabled={submitting} onClick={()=>void finish('IMPROVED')}>나아졌어요</button><button disabled={submitting} onClick={()=>void finish('SAME')}>그대로예요</button><button disabled={submitting} onClick={()=>void finish('WORSE')}>더 불편해요</button></div></>}</section></div>
+ return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><section className="recovery-modal"><button className="modal-close" onClick={onClose} aria-label="닫기"><X/></button><span>WHY NOW · {confidence}</span><p className="recovery-reason">{reason}</p><div className="recovery-timer" style={{'--progress':`${((totalDuration-remaining)/totalDuration)*360}deg`} as React.CSSProperties}><div><b>{countdown(remaining)}</b><small>{running?'회복 중':durationLabel(totalDuration)}</small></div></div>{remaining>0?<><h2>{title??labels[action][0]}</h2><p>{labels[action][1]}</p><button className="recovery-start" onClick={()=>setRunning(value=>!value)}>{running?'잠시 멈춤':'지금 시작'}</button></>:<><h2>실행 전보다 조금 나아졌나요?</h2><div className="recovery-outcomes"><button disabled={submitting} onClick={()=>void finish('IMPROVED')}>나아졌어요</button><button disabled={submitting} onClick={()=>void finish('SAME')}>그대로예요</button><button disabled={submitting} onClick={()=>void finish('WORSE')}>더 불편해요</button></div></>}</section></div>
 }
 
 function CheckInModal({userId,onClose,onSave}:{userId:string;onClose:()=>void;onSave:(input:CheckInInput)=>Promise<void>}){

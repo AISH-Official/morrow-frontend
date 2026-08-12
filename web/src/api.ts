@@ -1,4 +1,4 @@
-import type{AssistantResult,CheckInInput,Dashboard,PersonalizationProfile,TimelineKind,UserMemory,WeeklyReport}from'./types';
+import type{AssistantResult,CheckInInput,Dashboard,PersonalizationProfile,RecoveryAction,TimelineKind,UserMemory,WeeklyReport}from'./types';
 
 const API_ROOT=import.meta.env.VITE_API_BASE_URL||'/api/v1';
 const REQUEST_TIMEOUT=30000;
@@ -104,8 +104,12 @@ function normalizeKind(value:string):TimelineKind{
 }
 
 function normalizeDashboard(value:Dashboard):Dashboard{
- return{...value,hasHealthData:value.hasHealthData??Object.values(value.metrics??{}).some(item=>Number(item)>0),scoreConfidence:value.scoreConfidence??'LOW',scoreReasons:value.scoreReasons??[],lastUpdatedAt:value.lastUpdatedAt??null,healthDetails:value.healthDetails??{sleep:null,workouts:[]},timeline:(value.timeline??[]).map(item=>({...item,kind:normalizeKind(item.kind)})),recommendation:value.recommendation??null};
+ const recommendation=value.recommendation?{...value.recommendation,action:value.recommendation.action??actionFromTitle(value.recommendation.title),durationSeconds:value.recommendation.durationSeconds??durationFromTitle(value.recommendation.title),source:value.recommendation.source??'RULE',personalized:value.recommendation.personalized??false}:null;
+ return{...value,hasHealthData:value.hasHealthData??Object.values(value.metrics??{}).some(item=>Number(item)>0),scoreConfidence:value.scoreConfidence??'LOW',scoreReasons:value.scoreReasons??[],lastUpdatedAt:value.lastUpdatedAt??null,healthDetails:value.healthDetails??{sleep:null,workouts:[]},timeline:(value.timeline??[]).map(item=>({...item,kind:normalizeKind(item.kind)})),recommendation};
 }
+
+function actionFromTitle(title:string):RecoveryAction{if(/멈추|화면|눈을 쉬/.test(title))return'SCREEN_BREAK';if(title.includes('물'))return'WATER_WALK';if(/걷|걸어|산책|움직|좋은 흐름/.test(title))return'WALK';if(/집중|할 일|시작해/.test(title))return'FOCUS';if(/스트레칭|어깨|자세|몸을 천천히/.test(title))return'STRETCH';return'BREATH'}
+function durationFromTitle(title:string):number{const minutes=title.match(/(\d{1,2})\s*분/);if(minutes)return Math.max(1,Math.min(30,Number(minutes[1])))*60;return 60}
 
 export async function getDashboard():Promise<Dashboard>{return normalizeDashboard(await request<Dashboard>(await userPath('/dashboard')))}
 
@@ -155,7 +159,6 @@ export async function submitRecommendationFeedback(id:string,helpful:boolean):Pr
  await request(`/recommendations/${id}/feedback`,{method:'POST',body:JSON.stringify({completed:true,helpful,note:helpful?'도움이 됐어요':'다른 제안이 필요해요'})});
 }
 
-export type RecoveryAction='BREATH'|'WALK'|'WATER_WALK'|'STRETCH'|'FOCUS'|'SCREEN_BREAK';
 export async function createRecoveryAttempt(action:RecoveryAction,reason:string,confidence:string):Promise<{id:string}>{
  return request<{id:string}>('/recovery-attempts',{method:'POST',body:JSON.stringify({action,triggerType:'WEB_STARTED',reason,confidence,source:'WEB'})});
 }

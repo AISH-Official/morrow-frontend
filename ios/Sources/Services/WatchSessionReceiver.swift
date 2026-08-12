@@ -50,7 +50,7 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
         return values
     }
 
-    func sendWellnessContext(score: Int, summary: String, snapshot: HealthSnapshot, recommendation: String) {
+    func sendWellnessContext(score: Int, summary: String, snapshot: HealthSnapshot, recommendation: NativeRecommendation?) {
         var context: [String: Any] = pendingContext ?? [:]
         context.merge([
             "score": score,
@@ -62,7 +62,11 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
             "energy": snapshot.activeEnergyText,
             "exercise": snapshot.exerciseText,
             "respiratory": snapshot.respiratoryText,
-            "recommendation": recommendation,
+            "recommendation": recommendation?.title ?? "지금 상태를 기록하면 맞춤 행동을 제안해요",
+            "recommendationReason": recommendation?.rationale ?? "",
+            "recommendationAction": recommendation?.action ?? "",
+            "recommendationDuration": recommendation?.durationSeconds ?? 0,
+            "recommendationSource": recommendation?.source ?? "RULE",
             "updatedAt": ISO8601DateFormatter().string(from: Date())
         ], uniquingKeysWith: { _, new in new })
         pendingContext = context

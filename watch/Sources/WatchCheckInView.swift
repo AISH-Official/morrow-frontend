@@ -124,11 +124,32 @@ struct WatchCheckInView: View {
     }
 
     private var recommendation: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Label("NEXT BEST ACTION", systemImage: "sparkles").font(.system(size: 7, weight: .semibold, design: .monospaced)).foregroundStyle(WatchTheme.accent)
-            Text(session.context.recommendation).font(.system(size: 13, weight: .semibold))
+        Group {
+            if session.context.recommendationAction.isEmpty {
+                recommendationContent
+            } else {
+                NavigationLink(destination: RecoverySessionView(launch: .recommended(session.context))) {
+                    recommendationContent
+                }
+                .buttonStyle(.plain)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(10).background(LinearGradient(colors: [WatchTheme.accent.opacity(0.18), WatchTheme.panel], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13)).overlay(RoundedRectangle(cornerRadius: 13).stroke(WatchTheme.border))
+    }
+
+    private var recommendationContent: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Label("NEXT BEST ACTION", systemImage: "sparkles").font(.system(size: 7, weight: .semibold, design: .monospaced)).foregroundStyle(WatchTheme.accent)
+                Spacer()
+                if !session.context.recommendationAction.isEmpty { Image(systemName: "play.circle.fill").foregroundStyle(WatchTheme.mint) }
+            }
+            Text(session.context.recommendation).font(.system(size: 13, weight: .semibold))
+            if session.context.recommendationDuration > 0 {
+                Text("\(session.context.recommendationSource == "AI" ? "AI 맞춤" : "개인화") · \(max(1, session.context.recommendationDuration / 60))분")
+                    .font(.system(size: 7, design: .monospaced)).foregroundStyle(WatchTheme.muted)
+            }
+        }
     }
 
     private var actionGrid: some View {
@@ -303,6 +324,7 @@ private struct RecoveryLaunchContext {
     let confidence: String
     let durationSeconds: Int
     let attemptId: UUID?
+    var suggestedTitle: String? = nil
 
     static let breath = RecoveryLaunchContext(action: "BREATH", reason: "지금 손목에서 시작한 1분 회복이에요.", confidence: "USER", durationSeconds: 60, attemptId: nil)
     static func pending() -> RecoveryLaunchContext {
@@ -318,9 +340,23 @@ private struct RecoveryLaunchContext {
         ["morrow.watch.recovery.action", "morrow.watch.recovery.reason", "morrow.watch.recovery.confidence", "morrow.watch.recovery.duration", "morrow.watch.recovery.attemptId"].forEach { defaults.removeObject(forKey: $0) }
         return value
     }
-    var title: String { switch action { case "WALK": "5분 걷기"; case "WATER_WALK": "물 한 잔 + 걷기"; case "STRETCH": "3분 스트레칭"; case "FOCUS": "5분 집중"; case "SCREEN_BREAK": "화면 휴식"; default: "1분 호흡" } }
+    static func recommended(_ context: WatchWellnessContext) -> RecoveryLaunchContext {
+        RecoveryLaunchContext(
+            action: context.recommendationAction,
+            reason: context.recommendationReason.isEmpty ? "최근 흐름에 맞춰 제안한 회복 행동이에요." : context.recommendationReason,
+            confidence: context.recommendationSource == "AI" ? "AI" : "MEDIUM",
+            durationSeconds: max(30, context.recommendationDuration),
+            attemptId: nil,
+            suggestedTitle: context.recommendation
+        )
+    }
+    var title: String {
+        if let suggestedTitle, !suggestedTitle.isEmpty { return suggestedTitle }
+        let duration = max(1, durationSeconds / 60)
+        return switch action { case "WALK": "\(duration)분 걷기"; case "WATER_WALK": "\(duration)분 물 한 잔 + 걷기"; case "STRETCH": "\(duration)분 스트레칭"; case "FOCUS": "\(duration)분 집중"; case "SCREEN_BREAK": "\(duration)분 잠시 멈추기"; default: "\(duration)분 호흡" }
+    }
     var icon: String { switch action { case "WALK", "WATER_WALK": "figure.walk"; case "STRETCH": "figure.flexibility"; case "FOCUS": "scope"; case "SCREEN_BREAK": "eye"; default: "wind" } }
-    var cue: String { switch action { case "WALK": "편한 속도로 걷기"; case "WATER_WALK": "물 한 잔 뒤 천천히 걷기"; case "STRETCH": "목과 어깨 천천히 풀기"; case "FOCUS": "한 가지 일만 시작하기"; case "SCREEN_BREAK": "먼 곳을 바라보기"; default: "길게 내쉬기" } }
+    var cue: String { switch action { case "WALK": "편한 속도로 걷기"; case "WATER_WALK": "물 한 잔 뒤 천천히 걷기"; case "STRETCH": "목과 어깨 천천히 풀기"; case "FOCUS": "한 가지 일만 시작하기"; case "SCREEN_BREAK": "화면과 하던 일을 잠시 멈추기"; default: "길게 내쉬기" } }
 }
 
 private struct RecoverySessionView: View {
@@ -348,7 +384,7 @@ private struct RecoverySessionView: View {
                 ZStack {
                     Circle().stroke(WatchTheme.mint.opacity(0.12), lineWidth: 9)
                     Circle().trim(from: 0, to: progress).stroke(WatchTheme.mint, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90)).animation(.linear, value: remaining)
-                    VStack { Text("\(remaining)").font(.system(size: 28, weight: .medium, design: .monospaced)); Text(running ? activeCue : launch.title).font(.caption2).foregroundStyle(WatchTheme.muted).multilineTextAlignment(.center) }
+                    VStack { Text(timeText).font(.system(size: 25, weight: .medium, design: .monospaced)); Text(running ? activeCue : launch.title).font(.caption2).foregroundStyle(WatchTheme.muted).multilineTextAlignment(.center).lineLimit(2) }
                 }.frame(width: 108, height: 108)
                 if remaining > 0 {
                     Button(running ? "잠시 멈춤" : "시작") { running.toggle(); WKInterfaceDevice.current().play(.click) }.buttonStyle(.borderedProminent).tint(WatchTheme.mint)
@@ -375,6 +411,7 @@ private struct RecoverySessionView: View {
     }
 
     private var progress: Double { Double(max(0, launch.durationSeconds - remaining)) / Double(max(1, launch.durationSeconds)) }
+    private var timeText: String { String(format: "%d:%02d", remaining / 60, remaining % 60) }
     private var activeCue: String { launch.action == "BREATH" ? (((launch.durationSeconds - remaining) / 4).isMultiple(of: 2) ? "천천히 들이쉬기" : "길게 내쉬기") : launch.cue }
     private func outcomeButton(_ title: String, _ outcome: String, _ tint: Color) -> some View {
         Button(title) { Task { await submit(outcome) } }.buttonStyle(.bordered).tint(tint).font(.system(size: 9)).disabled(isSubmitting)

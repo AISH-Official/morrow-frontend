@@ -35,6 +35,10 @@ struct NativeRecommendation: Decodable {
     let id: String
     let title: String
     let rationale: String
+    let action: String?
+    let durationSeconds: Int?
+    let source: String?
+    let personalized: Bool?
 }
 
 struct NativeServerCheckIn: Decodable {

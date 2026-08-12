@@ -1,4 +1,5 @@
 export type TimelineKind='sleep'|'checkin'|'recovery'|'activity'|'insight';
+export type RecoveryAction='BREATH'|'WALK'|'WATER_WALK'|'STRETCH'|'FOCUS'|'SCREEN_BREAK';
 
 export type TimelineItem={
  id:string;
@@ -9,7 +10,7 @@ export type TimelineItem={
  userConfirmed:boolean;
 };
 
-export type Recommendation={id:string;title:string;rationale:string};
+export type Recommendation={id:string;title:string;rationale:string;action?:RecoveryAction;durationSeconds?:number;source?:'AI'|'LEARNED'|'RULE';personalized?:boolean};
 
 export type Dashboard={
  wellnessLoad:string;

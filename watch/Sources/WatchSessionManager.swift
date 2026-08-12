@@ -13,6 +13,10 @@ struct WatchWellnessContext {
     var exercise = "--"
     var respiratory = "--"
     var recommendation = "상태를 기록하면 맞춤 행동을 제안해요"
+    var recommendationReason = ""
+    var recommendationAction = ""
+    var recommendationDuration = 0
+    var recommendationSource = "RULE"
     var updatedAt = Date()
 }
 
@@ -130,6 +134,10 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
                 exercise: values["exercise"] as? String ?? self.context.exercise,
                 respiratory: values["respiratory"] as? String ?? self.context.respiratory,
                 recommendation: values["recommendation"] as? String ?? self.context.recommendation,
+                recommendationReason: values["recommendationReason"] as? String ?? self.context.recommendationReason,
+                recommendationAction: values["recommendationAction"] as? String ?? self.context.recommendationAction,
+                recommendationDuration: values["recommendationDuration"] as? Int ?? self.context.recommendationDuration,
+                recommendationSource: values["recommendationSource"] as? String ?? self.context.recommendationSource,
                 updatedAt: (values["updatedAt"] as? String).flatMap(ISO8601DateFormatter().date(from:)) ?? .now
             )
         }

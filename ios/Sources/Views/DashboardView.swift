@@ -6,6 +6,7 @@ struct DashboardView: View {
     @EnvironmentObject private var health: HealthStore
     @EnvironmentObject private var syncService: MorrowSyncService
     @Query(sort: \CheckInRecord.recordedAt, order: .reverse) private var checkIns: [CheckInRecord]
+    @State private var recommendedRecovery: PhoneRecoveryLaunch?
     private let analyzer = BaselineAnalyzer()
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
@@ -32,14 +33,20 @@ struct DashboardView: View {
                     healthDetailPanel
 
                     if let recommendation = syncService.currentRecommendation {
-                        RecommendationCard(title: recommendation.title, rationale: recommendation.rationale)
+                        RecommendationCard(
+                            title: recommendation.title,
+                            rationale: recommendation.rationale,
+                            durationSeconds: recommendationDuration(recommendation),
+                            source: recommendation.source,
+                            onStart: { recommendedRecovery = recoveryLaunch(recommendation) }
+                        )
                     } else {
                         RecommendationCard(title: "지금 상태를 기록해 보세요", rationale: "30초 체크인을 남기면 오늘의 흐름에 맞는 행동을 제안해 드려요.")
                     }
 
                     HStack(spacing: 10) {
                         NavigationLink(destination: RecoveryActionView()) {
-                            dashboardAction("지금 1분 회복", "바로 실행", "wind", Theme.mint)
+                            dashboardAction("직접 1분 호흡", "수동으로 시작", "wind", Theme.mint)
                         }
                         NavigationLink(destination: RecoveryEffectReportView()) {
                             dashboardAction("회복 효과", "이번 주 학습", "chart.xyaxis.line", Theme.accent)
@@ -100,7 +107,41 @@ struct DashboardView: View {
             .tint(Theme.accent)
             .refreshable { await health.refresh() }
             .task { await health.requestAuthorizationAndLoad() }
+            .sheet(item: $recommendedRecovery) { launch in
+                RecoveryActionView(launch: launch)
+            }
         }
+    }
+
+    private func recoveryLaunch(_ recommendation: NativeRecommendation) -> PhoneRecoveryLaunch {
+        PhoneRecoveryLaunch(
+            action: recommendation.action ?? actionFromTitle(recommendation.title),
+            reason: recommendation.rationale,
+            confidence: recommendation.source == "AI" ? "AI" : "MEDIUM",
+            durationSeconds: recommendationDuration(recommendation),
+            attemptId: nil,
+            autoStart: false,
+            suggestedTitle: recommendation.title
+        )
+    }
+
+    private func recommendationDuration(_ recommendation: NativeRecommendation) -> Int {
+        if let value = recommendation.durationSeconds, value >= 30 { return value }
+        let pattern = try? NSRegularExpression(pattern: "(\\d{1,2})\\s*분")
+        let range = NSRange(recommendation.title.startIndex..., in: recommendation.title)
+        if let match = pattern?.firstMatch(in: recommendation.title, range: range),
+           let minuteRange = Range(match.range(at: 1), in: recommendation.title),
+           let minutes = Int(recommendation.title[minuteRange]) { return max(1, min(30, minutes)) * 60 }
+        return 60
+    }
+
+    private func actionFromTitle(_ title: String) -> String {
+        if title.contains("멈추") || title.contains("화면") || title.contains("눈을 쉬") { return "SCREEN_BREAK" }
+        if title.contains("물") { return "WATER_WALK" }
+        if title.contains("걷") || title.contains("걸어") || title.contains("산책") || title.contains("움직") { return "WALK" }
+        if title.contains("집중") || title.contains("할 일") { return "FOCUS" }
+        if title.contains("스트레칭") || title.contains("어깨") || title.contains("자세") { return "STRETCH" }
+        return "BREATH"
     }
 
     private var header: some View {

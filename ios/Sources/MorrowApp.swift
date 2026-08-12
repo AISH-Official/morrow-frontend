@@ -179,6 +179,7 @@ private struct AuthenticatedRootView: View {
             .onChange(of: healthSignature) { _, _ in syncWatchContext(); Task { await synchronize() } }
             .onChange(of: checkInSignature) { _, _ in Task { await synchronize() } }
             .onChange(of: syncService.recoveryScore) { _, _ in syncWatchContext() }
+            .onChange(of: syncService.currentRecommendation?.id) { _, _ in syncWatchContext() }
             .onChange(of: scenePhase) { _, phase in if phase == .active { importWatchCheckIns(); syncWatchContext(); handlePendingNotificationAction(); Task { await synchronize() } } }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("morrow.phone.action"))) { _ in handlePendingNotificationAction() }
             .sheet(item: $pendingRecovery) { RecoveryActionView(launch: $0) }
@@ -233,7 +234,7 @@ private struct AuthenticatedRootView: View {
             score: score,
             summary: RecoveryLevel(score: score).label,
             snapshot: healthStore.snapshot,
-            recommendation: syncService.currentRecommendation?.title ?? "지금 상태를 기록하면 맞춤 행동을 제안해요"
+            recommendation: syncService.currentRecommendation
         )
         Task {
             if let connection = try? await MorrowAPIClient.shared.connectionContext() {

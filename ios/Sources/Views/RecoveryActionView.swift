@@ -9,6 +9,17 @@ struct PhoneRecoveryLaunch: Identifiable {
     let durationSeconds: Int
     let attemptId: UUID?
     let autoStart: Bool
+    let suggestedTitle: String?
+
+    init(action: String, reason: String, confidence: String, durationSeconds: Int, attemptId: UUID?, autoStart: Bool, suggestedTitle: String? = nil) {
+        self.action = action
+        self.reason = reason
+        self.confidence = confidence
+        self.durationSeconds = durationSeconds
+        self.attemptId = attemptId
+        self.autoStart = autoStart
+        self.suggestedTitle = suggestedTitle
+    }
 
     static let breath = PhoneRecoveryLaunch(action: "BREATH", reason: "지금 시작한 1분 회복 행동이에요.", confidence: "USER", durationSeconds: 60, attemptId: nil, autoStart: false)
 
@@ -27,9 +38,14 @@ struct PhoneRecoveryLaunch: Identifiable {
         return value
     }
 
-    var title: String { switch action { case "WALK": "5분 걷기"; case "WATER_WALK": "물 한 잔 + 걷기"; case "STRETCH": "3분 스트레칭"; case "FOCUS": "5분 집중"; case "SCREEN_BREAK": "1분 화면 휴식"; default: "1분 호흡" } }
+    var title: String {
+        if let suggestedTitle, !suggestedTitle.isEmpty { return suggestedTitle }
+        let duration = durationText
+        return switch action { case "WALK": "\(duration) 걷기"; case "WATER_WALK": "\(duration) 물 한 잔 + 걷기"; case "STRETCH": "\(duration) 스트레칭"; case "FOCUS": "\(duration) 집중"; case "SCREEN_BREAK": "\(duration) 잠시 멈추기"; default: "\(duration) 호흡" }
+    }
     var icon: String { switch action { case "WALK", "WATER_WALK": "figure.walk"; case "STRETCH": "figure.flexibility"; case "FOCUS": "scope"; case "SCREEN_BREAK": "eye"; default: "wind" } }
-    var cue: String { switch action { case "WALK": "편한 속도로 걸어보세요"; case "WATER_WALK": "물 한 잔 뒤 천천히 걸어보세요"; case "STRETCH": "목과 어깨부터 천천히 풀어보세요"; case "FOCUS": "방해 요소를 닫고 한 가지만 시작하세요"; case "SCREEN_BREAK": "먼 곳을 바라보고 어깨 힘을 빼세요"; default: "4초 들이쉬고 6초 내쉬세요" } }
+    var cue: String { switch action { case "WALK": "편한 속도로 걸어보세요"; case "WATER_WALK": "물 한 잔 뒤 천천히 걸어보세요"; case "STRETCH": "목과 어깨부터 천천히 풀어보세요"; case "FOCUS": "방해 요소를 닫고 한 가지만 시작하세요"; case "SCREEN_BREAK": "화면과 하던 일을 잠시 멈추고 몸의 힘을 빼세요"; default: "4초 들이쉬고 6초 내쉬세요" } }
+    private var durationText: String { let minutes = durationSeconds / 60; let seconds = durationSeconds % 60; return seconds == 0 ? "\(max(1, minutes))분" : "\(minutes)분 \(seconds)초" }
 }
 
 struct RecoveryActionView: View {
