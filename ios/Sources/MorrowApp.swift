@@ -189,7 +189,7 @@ private struct AuthenticatedRootView: View {
     @MainActor
     private func logout() async {
         await MorrowAPIClient.shared.logout()
-        notificationManager.disable()
+        await notificationManager.disable(unregisterServer: false)
         watchReceiver.sendLogoutContext()
         onLogout()
     }
@@ -437,7 +437,8 @@ final class PhoneNotificationManager: ObservableObject {
         UserDefaults.standard.set(Date(), forKey: key)
     }
 
-    func disable() {
+    func disable(unregisterServer: Bool = true) async {
+        if unregisterServer { await MorrowAPIClient.shared.unregisterPushToken() }
         center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()
         UIApplication.shared.unregisterForRemoteNotifications()

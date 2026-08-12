@@ -184,6 +184,21 @@ actor MorrowAPIClient {
         try await send(PushDeviceRequest(userId: credentials.userId, deviceToken: token, platform: "IOS", environment: pushEnvironment), path: "notifications/devices")
     }
 
+    func unregisterPushToken() async {
+        guard let credentials = cachedCredentials ?? DeviceCredentialStore.load(),
+              let token = UserDefaults.standard.string(forKey: "morrow.push.token"),
+              let root = MorrowRuntimeConfiguration.apiRoot,
+              var components = URLComponents(url: root.appending(path: "notifications/devices"), resolvingAgainstBaseURL: false)
+        else { return }
+        components.queryItems = [URLQueryItem(name: "userId", value: credentials.userId), URLQueryItem(name: "deviceToken", value: token)]
+        guard let url = components.url else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 5
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
     func sendAssistantMessage(_ content: String) async throws -> NativeAssistantReply {
         let credentials = try await credentials()
         return try await sendAndDecode(

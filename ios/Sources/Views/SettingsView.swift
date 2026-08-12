@@ -59,7 +59,7 @@ struct SettingsView: View {
                 Toggle("스마트 알림", isOn: $notificationsEnabled)
                     .onChange(of: notificationsEnabled) { _, enabled in
                         if enabled { Task { await notifications.requestAuthorization(); await notifications.scheduleDailyCheckIns() } }
-                        else { notifications.disable() }
+                        else { Task { await notifications.disable() } }
                     }
                 LabeledContent("iPhone", value: notifications.statusText)
                 Text("오전 8시부터 오후 9시까지 매시간 체크인을 안내하고, AI가 최근 건강 요약에서 이상 흐름을 판단하면 맞춤 회복 알림을 최대 6시간에 한 번 보냅니다.")
