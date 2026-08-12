@@ -52,23 +52,21 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
 
     func sendWellnessContext(score: Int, summary: String, snapshot: HealthSnapshot, recommendation: NativeRecommendation?) {
         var context: [String: Any] = pendingContext ?? [:]
-        context.merge([
-            "score": score,
-            "summary": summary,
-            "sleep": snapshot.sleepText,
-            "hrv": snapshot.hrvText,
-            "heart": snapshot.restingHeartRateText,
-            "steps": snapshot.stepsText,
-            "energy": snapshot.activeEnergyText,
-            "exercise": snapshot.exerciseText,
-            "respiratory": snapshot.respiratoryText,
-            "recommendation": recommendation?.title ?? "지금 상태를 기록하면 맞춤 행동을 제안해요",
-            "recommendationReason": recommendation?.rationale ?? "",
-            "recommendationAction": recommendation?.action ?? "",
-            "recommendationDuration": recommendation?.durationSeconds ?? 0,
-            "recommendationSource": recommendation?.source ?? "RULE",
-            "updatedAt": ISO8601DateFormatter().string(from: Date())
-        ], uniquingKeysWith: { _, new in new })
+        context["score"] = score
+        context["summary"] = summary
+        context["sleep"] = snapshot.sleepText
+        context["hrv"] = snapshot.hrvText
+        context["heart"] = snapshot.restingHeartRateText
+        context["steps"] = snapshot.stepsText
+        context["energy"] = snapshot.activeEnergyText
+        context["exercise"] = snapshot.exerciseText
+        context["respiratory"] = snapshot.respiratoryText
+        context["recommendation"] = recommendation?.title ?? "지금 상태를 기록하면 맞춤 행동을 제안해요"
+        context["recommendationReason"] = recommendation?.rationale ?? ""
+        context["recommendationAction"] = recommendation?.action ?? ""
+        context["recommendationDuration"] = recommendation?.durationSeconds ?? 0
+        context["recommendationSource"] = recommendation?.source ?? "RULE"
+        context["updatedAt"] = ISO8601DateFormatter().string(from: Date())
         pendingContext = context
         guard WCSession.default.activationState == .activated else { return }
         try? WCSession.default.updateApplicationContext(context)
