@@ -14,8 +14,9 @@ final class MorrowWatchExtensionDelegate: NSObject, WKExtensionDelegate, UNUserN
         UNUserNotificationCenter.current().delegate = self
         let recovery = UNNotificationAction(identifier: "START_RECOVERY", title: "지금 시작", options: [.foreground])
         let checkIn = UNNotificationAction(identifier: "OPEN_CHECKIN", title: "지금 기록", options: [.foreground])
-        let category = UNNotificationCategory(identifier: "MORROW_ACTION", actions: [recovery, checkIn], intentIdentifiers: [])
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+        let recoveryCategory = UNNotificationCategory(identifier: "MORROW_ACTION", actions: [recovery], intentIdentifiers: [])
+        let checkInCategory = UNNotificationCategory(identifier: "MORROW_CHECKIN", actions: [checkIn], intentIdentifiers: [])
+        UNUserNotificationCenter.current().setNotificationCategories([recoveryCategory, checkInCategory])
     }
 
     func didRegisterForRemoteNotifications(withDeviceToken deviceToken: Data) {
@@ -40,7 +41,9 @@ final class MorrowWatchExtensionDelegate: NSObject, WKExtensionDelegate, UNUserN
             UserDefaults.standard.set((info["durationSeconds"] as? NSNumber)?.intValue ?? 60, forKey: "morrow.watch.recovery.duration")
             UserDefaults.standard.set(info["reason"] as? String ?? response.notification.request.content.body, forKey: "morrow.watch.recovery.reason")
             UserDefaults.standard.set(info["confidence"] as? String ?? "LOW", forKey: "morrow.watch.recovery.confidence")
-        } else if response.actionIdentifier == "OPEN_CHECKIN" { UserDefaults.standard.set("CHECKIN", forKey: "morrow.watch.pendingAction") }
+        } else if response.actionIdentifier == "OPEN_CHECKIN" || (response.actionIdentifier == UNNotificationDefaultActionIdentifier && info["type"] as? String == "CHECKIN") {
+            UserDefaults.standard.set("CHECKIN", forKey: "morrow.watch.pendingAction")
+        }
         await MainActor.run { NotificationCenter.default.post(name: Notification.Name("morrow.watch.action"), object: nil) }
     }
 }

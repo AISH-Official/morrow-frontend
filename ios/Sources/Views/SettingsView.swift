@@ -62,7 +62,7 @@ struct SettingsView: View {
                         else { notifications.disable() }
                     }
                 LabeledContent("iPhone", value: notifications.statusText)
-                Text("기본 체크인 알림과 함께 AI가 최근 건강 요약과 체크인 흐름에서 도움이 된다고 판단한 맞춤 알림을 최대 6시간에 한 번 보냅니다.")
+                Text("오전 8시부터 오후 9시까지 매시간 체크인을 안내하고, AI가 최근 건강 요약에서 이상 흐름을 판단하면 맞춤 회복 알림을 최대 6시간에 한 번 보냅니다.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("데이터와 개인정보") {

@@ -245,8 +245,6 @@ private struct AuthenticatedRootView: View {
 
     private func synchronize() async {
         await syncService.synchronize(checkIns: checkIns, snapshot: syncDerivedHealth ? healthStore.snapshot : nil, modelContext: modelContext)
-        guard notificationsEnabled, let insight = await notificationManager.evaluateAIInsight() else { return }
-        watchReceiver.sendAIInsight(title: insight.title, body: insight.body, generatedAt: .now)
     }
 
     private func configureNotifications() async {
@@ -409,8 +407,6 @@ private extension CheckInSource {
 final class PhoneNotificationManager: ObservableObject {
     @Published private(set) var statusText = "알림 권한 확인 전"
     private let center = UNUserNotificationCenter.current()
-    private let analysisKey = "morrow.notifications.ai.lastAnalysis"
-    private let notificationKey = "morrow.notifications.ai.lastDelivery"
 
     func requestAuthorization() async {
         do {
@@ -424,12 +420,6 @@ final class PhoneNotificationManager: ObservableObject {
         let old = ["morrow.checkin.morning", "morrow.checkin.evening"]
         let weekly = (1...7).flatMap { ["morrow.phone.action.morning.\($0)", "morrow.phone.action.evening.\($0)"] }
         center.removePendingNotificationRequests(withIdentifiers: old + weekly)
-        let morning = ["물 한 잔과 30초 체크인", "창가에서 30초 햇빛 보기", "어깨 세 번 돌리고 길게 내쉬기", "할 일 하나만 골라 10분 시작", "가까운 곳까지 3분 걷기", "물 한 잔 뒤 몸 상태 확인", "1분 호흡으로 천천히 시작"]
-        let evening = ["화면을 5분 내려놓기", "길게 내쉬는 호흡 여섯 번", "목과 어깨 3분 스트레칭", "도움 된 회복 행동 하나 기록", "잠들기 전 물 한 모금", "5분 천천히 걷고 마무리", "다음 주를 위한 30초 체크인"]
-        for weekday in 1...7 {
-            await scheduleWeekly(identifier: "morrow.phone.action.morning.\(weekday)", weekday: weekday, hour: 10, minute: 0, title: "지금 바로 해볼 한 가지", body: morning[weekday - 1])
-            await scheduleWeekly(identifier: "morrow.phone.action.evening.\(weekday)", weekday: weekday, hour: 20, minute: 30, title: "오늘의 회복 행동", body: evening[weekday - 1])
-        }
     }
 
     func scheduleRecoveryAlertIfNeeded(load: Int, summary: String) async {
@@ -447,35 +437,6 @@ final class PhoneNotificationManager: ObservableObject {
         UserDefaults.standard.set(Date(), forKey: key)
     }
 
-    func evaluateAIInsight() async -> AIProactiveInsight? {
-        let lastAnalysis = UserDefaults.standard.object(forKey: analysisKey) as? Date ?? .distantPast
-        guard Date().timeIntervalSince(lastAnalysis) > 90 * 60 else { return nil }
-        UserDefaults.standard.set(Date(), forKey: analysisKey)
-        guard let insight = try? await MorrowAPIClient.shared.proactiveInsight(), insight.shouldNotify else { return nil }
-
-        let lastDelivery = UserDefaults.standard.object(forKey: notificationKey) as? Date ?? .distantPast
-        guard Date().timeIntervalSince(lastDelivery) > 6 * 60 * 60 else { return nil }
-        let content = UNMutableNotificationContent()
-        content.title = insight.title
-        content.body = insight.body
-        content.sound = .default
-        let metadata = recoveryMetadata(insight.title + " " + insight.body)
-        content.userInfo = ["type": "RECOVERY", "action": metadata.action, "durationSeconds": metadata.duration, "reason": insight.reason, "confidence": "AI"]
-        content.categoryIdentifier = "MORROW_ACTION"
-        let request = UNNotificationRequest(
-            identifier: "morrow.ai.insight.\(Int(Date().timeIntervalSince1970))",
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
-        )
-        do {
-            try await center.add(request)
-        } catch {
-            return nil
-        }
-        UserDefaults.standard.set(Date(), forKey: notificationKey)
-        return insight
-    }
-
     func disable() {
         center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()
@@ -483,26 +444,4 @@ final class PhoneNotificationManager: ObservableObject {
         statusText = "Morrow 알림 꺼짐"
     }
 
-    private func scheduleDaily(identifier: String, hour: Int, minute: Int, title: String, body: String) async {
-        let content = UNMutableNotificationContent(); content.title = title; content.body = body; content.sound = .default
-        let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute), repeats: true)
-        try? await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
-    }
-
-    private func scheduleWeekly(identifier: String, weekday: Int, hour: Int, minute: Int, title: String, body: String) async {
-        let content = UNMutableNotificationContent(); content.title = title; content.body = body; content.sound = .default; content.categoryIdentifier = "MORROW_ACTION"
-        let metadata = recoveryMetadata(title + " " + body)
-        content.userInfo = ["type": "RECOVERY", "action": metadata.action, "durationSeconds": metadata.duration, "reason": body, "confidence": "ROUTINE"]
-        let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute, weekday: weekday), repeats: true)
-        try? await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
-    }
-
-    private func recoveryMetadata(_ text: String) -> (action: String, duration: Int) {
-        if text.contains("걷") { return ("WALK", 300) }
-        if text.contains("스트레칭") || text.contains("어깨") { return ("STRETCH", 180) }
-        if text.contains("집중") || text.contains("할 일") { return ("FOCUS", 300) }
-        if text.contains("화면") || text.contains("눈") { return ("SCREEN_BREAK", 60) }
-        if text.contains("물") { return ("WATER_WALK", 180) }
-        return ("BREATH", 60)
-    }
 }
