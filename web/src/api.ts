@@ -104,7 +104,7 @@ function normalizeKind(value:string):TimelineKind{
 }
 
 function normalizeDashboard(value:Dashboard):Dashboard{
- return{...value,hasHealthData:value.hasHealthData??Object.values(value.metrics??{}).some(item=>Number(item)>0),scoreConfidence:value.scoreConfidence??'LOW',scoreReasons:value.scoreReasons??[],lastUpdatedAt:value.lastUpdatedAt??null,timeline:(value.timeline??[]).map(item=>({...item,kind:normalizeKind(item.kind)})),recommendation:value.recommendation??null};
+ return{...value,hasHealthData:value.hasHealthData??Object.values(value.metrics??{}).some(item=>Number(item)>0),scoreConfidence:value.scoreConfidence??'LOW',scoreReasons:value.scoreReasons??[],lastUpdatedAt:value.lastUpdatedAt??null,healthDetails:value.healthDetails??{sleep:null,workouts:[]},timeline:(value.timeline??[]).map(item=>({...item,kind:normalizeKind(item.kind)})),recommendation:value.recommendation??null};
 }
 
 export async function getDashboard():Promise<Dashboard>{return normalizeDashboard(await request<Dashboard>(await userPath('/dashboard')))}

@@ -219,7 +219,9 @@ private struct AuthenticatedRootView: View {
     }
 
     private var healthSignature: String {
-        "\(healthStore.snapshot.sleepMinutes)-\(healthStore.snapshot.hrv)-\(healthStore.snapshot.restingHeartRate)-\(healthStore.snapshot.steps)-\(healthStore.snapshot.activeEnergyKcal)-\(healthStore.snapshot.exerciseMinutes)"
+        let sleep = healthStore.snapshot.sleepSession?.clientSleepId ?? "no-sleep"
+        let workouts = healthStore.snapshot.workouts.map(\.clientWorkoutId).joined(separator: ",")
+        return "\(healthStore.snapshot.sleepMinutes)-\(healthStore.snapshot.hrv)-\(healthStore.snapshot.restingHeartRate)-\(healthStore.snapshot.steps)-\(healthStore.snapshot.activeEnergyKcal)-\(healthStore.snapshot.exerciseMinutes)-\(sleep)-\(workouts)"
     }
 
     private var checkInSignature: String { checkIns.map { $0.id.uuidString }.joined(separator: "-") }
@@ -261,6 +263,8 @@ final class MorrowSyncService: ObservableObject {
     @Published private(set) var recoveryScore: Int?
     @Published private(set) var currentRecommendation: NativeRecommendation?
     private let client = MorrowAPIClient.shared
+    private var isSynchronizing = false
+    private var resyncRequested = false
 
     var statusText: String {
         switch state {
@@ -272,19 +276,26 @@ final class MorrowSyncService: ObservableObject {
     }
 
     func synchronize(checkIns: [CheckInRecord], snapshot: HealthSnapshot?, modelContext: ModelContext) async {
-        state = .syncing
-        do {
-            for record in checkIns where !record.isSynced { try await upload(record) }
-            if let snapshot, snapshot.hasHealthData { try await upload(snapshot) }
-            try await mergeServerCheckIns(into: checkIns, modelContext: modelContext)
-            let dashboard = try await client.dashboard()
-            recoveryScore = dashboard.score
-            currentRecommendation = dashboard.recommendation
-            try? modelContext.save()
-            state = .synced(.now)
-        } catch {
-            state = .failed(error.localizedDescription)
-        }
+        if isSynchronizing { resyncRequested = true; return }
+        isSynchronizing = true
+        defer { isSynchronizing = false }
+        repeat {
+            resyncRequested = false
+            state = .syncing
+            do {
+                let current = try modelContext.fetch(FetchDescriptor<CheckInRecord>())
+                for record in current where !record.isSynced { try await upload(record) }
+                if let snapshot, snapshot.hasHealthData { try await upload(snapshot) }
+                try await mergeServerCheckIns(modelContext: modelContext)
+                let dashboard = try await client.dashboard()
+                recoveryScore = dashboard.score
+                currentRecommendation = dashboard.recommendation
+                try modelContext.save()
+                state = .synced(.now)
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+        } while resyncRequested
     }
 
     func synchronizeWatch(_ summary: IncomingWatchHealthSummary) async {
@@ -293,11 +304,11 @@ final class MorrowSyncService: ObservableObject {
             let credentials = try await client.credentials()
             let bucket = Int(summary.recordedAt.timeIntervalSince1970 / 300)
             let payload = HealthPayload(
-                userId: credentials.userId, clientSnapshotId: "watch-\(bucket)", source: "WATCH", sleepMinutes: 0,
-                heartRate: summary.heartRate, restingHeartRate: 0, hrv: summary.hrv, steps: summary.steps,
+                userId: credentials.userId, clientSnapshotId: "watch-\(bucket)", source: "WATCH", sleepMinutes: summary.sleepMinutes,
+                heartRate: summary.heartRate, restingHeartRate: summary.restingHeartRate, hrv: summary.hrv, steps: summary.steps,
                 activeEnergyKcal: summary.activeEnergyKcal, exerciseMinutes: summary.exerciseMinutes,
-                distanceMeters: 0, flightsClimbed: 0, respiratoryRate: 0, oxygenSaturationPercent: 0,
-                recordedAt: summary.recordedAt
+                distanceMeters: summary.distanceMeters, flightsClimbed: 0, respiratoryRate: 0, oxygenSaturationPercent: 0,
+                recordedAt: summary.recordedAt, sleepSession: summary.sleepSession, workouts: summary.workouts
             )
             try await post(payload, path: "health/snapshots")
             let dashboard = try await client.dashboard()
@@ -328,7 +339,8 @@ final class MorrowSyncService: ObservableObject {
             hrv: snapshot.hrv, steps: snapshot.steps, activeEnergyKcal: snapshot.activeEnergyKcal,
             exerciseMinutes: snapshot.exerciseMinutes, distanceMeters: snapshot.distanceMeters,
             flightsClimbed: snapshot.flightsClimbed, respiratoryRate: snapshot.respiratoryRate,
-            oxygenSaturationPercent: snapshot.oxygenSaturationPercent, recordedAt: .now
+            oxygenSaturationPercent: snapshot.oxygenSaturationPercent, recordedAt: .now,
+            sleepSession: snapshot.sleepSession, workouts: snapshot.workouts
         )
         try await post(payload, path: "health/snapshots")
     }
@@ -337,9 +349,17 @@ final class MorrowSyncService: ObservableObject {
         try await client.send(value, path: path)
     }
 
-    private func mergeServerCheckIns(into local: [CheckInRecord], modelContext: ModelContext) async throws {
+    private func mergeServerCheckIns(modelContext: ModelContext) async throws {
         let remote = try await client.checkIns()
         let remoteIds = Set(remote.map(\.id))
+        var local = try modelContext.fetch(FetchDescriptor<CheckInRecord>())
+        var canonicalByServerId: [UUID: CheckInRecord] = [:]
+        for record in local {
+            guard let serverId = record.serverId else { continue }
+            if canonicalByServerId[serverId] != nil { modelContext.delete(record) }
+            else { canonicalByServerId[serverId] = record }
+        }
+        local = try modelContext.fetch(FetchDescriptor<CheckInRecord>())
         for value in remote {
             let matched = local.first(where: { $0.serverId == value.id || $0.id.uuidString == value.clientEventId })
             if let matched {
@@ -349,7 +369,7 @@ final class MorrowSyncService: ObservableObject {
             }
             guard let status = WellnessStatus(apiValue: value.status) else { continue }
             let record = CheckInRecord(
-                id: value.clientEventId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+                id: value.clientEventId.flatMap(UUID.init(uuidString:)) ?? value.id,
                 status: status,
                 cause: value.cause.flatMap(WellnessCause.init(apiValue:)),
                 note: value.note,
@@ -360,13 +380,14 @@ final class MorrowSyncService: ObservableObject {
             )
             modelContext.insert(record)
         }
+        local = try modelContext.fetch(FetchDescriptor<CheckInRecord>())
         for record in local where record.isSynced && record.serverId != nil && !remoteIds.contains(record.serverId!) {
             modelContext.delete(record)
         }
     }
 
     private struct CheckInPayload: Encodable { let userId, clientEventId, status: String; let cause: String?; let note, source: String; let recordedAt: Date }
-    private struct HealthPayload: Encodable { let userId, clientSnapshotId, source: String; let sleepMinutes: Int; let heartRate, restingHeartRate, hrv, steps, activeEnergyKcal, exerciseMinutes, distanceMeters, flightsClimbed, respiratoryRate, oxygenSaturationPercent: Double; let recordedAt: Date }
+    private struct HealthPayload: Encodable { let userId, clientSnapshotId, source: String; let sleepMinutes: Int; let heartRate, restingHeartRate, hrv, steps, activeEnergyKcal, exerciseMinutes, distanceMeters, flightsClimbed, respiratoryRate, oxygenSaturationPercent: Double; let recordedAt: Date; let sleepSession: SleepSessionDetail?; let workouts: [WorkoutDetail] }
 }
 
 private extension WellnessStatus {

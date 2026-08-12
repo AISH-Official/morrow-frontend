@@ -21,12 +21,43 @@ struct MorrowWatchApp: App {
 }
 
 struct WatchHealthSnapshot {
+    var sleepMinutes = 0
     var heartRate = 0.0
+    var restingHeartRate = 0.0
     var hrv = 0.0
     var steps = 0.0
     var activeEnergyKcal = 0.0
     var exerciseMinutes = 0.0
-    var hasData: Bool { heartRate > 0 || hrv > 0 || steps > 0 || activeEnergyKcal > 0 || exerciseMinutes > 0 }
+    var distanceMeters = 0.0
+    var sleepSession: WatchSleepSession?
+    var workouts: [WatchWorkoutDetail] = []
+    var hasData: Bool { sleepMinutes > 0 || heartRate > 0 || hrv > 0 || steps > 0 || activeEnergyKcal > 0 || exerciseMinutes > 0 || !workouts.isEmpty }
+}
+
+struct WatchSleepSession: Codable {
+    let clientSleepId: String
+    let startAt: Date
+    let endAt: Date
+    let totalMinutes: Int
+    let coreMinutes: Int
+    let deepMinutes: Int
+    let remMinutes: Int
+    let awakeMinutes: Int
+    let source: String
+}
+
+struct WatchWorkoutDetail: Codable {
+    let clientWorkoutId: String
+    let activityType: String
+    let startAt: Date
+    let endAt: Date
+    let durationMinutes: Double
+    let activeEnergyKcal: Double
+    let distanceMeters: Double
+    let averageHeartRate: Double
+    let maxHeartRate: Double
+    let intensity: String
+    let source: String
 }
 
 @MainActor
@@ -37,18 +68,33 @@ final class WatchHealthStore: ObservableObject {
 
     func requestAuthorizationAndLoad() async {
         guard HKHealthStore.isHealthDataAvailable() else { statusText = "HealthKit 사용 불가"; return }
-        let identifiers: [HKQuantityTypeIdentifier] = [.heartRate, .heartRateVariabilitySDNN, .stepCount, .activeEnergyBurned, .appleExerciseTime]
+        let identifiers: [HKQuantityTypeIdentifier] = [.heartRate, .restingHeartRate, .heartRateVariabilitySDNN, .stepCount, .activeEnergyBurned, .appleExerciseTime, .distanceWalkingRunning]
         let types = identifiers.compactMap(HKQuantityType.quantityType(forIdentifier:))
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { statusText = "수면 데이터 형식 미지원"; return }
+        let workoutType = HKObjectType.workoutType()
+        var readTypes = Set<HKObjectType>(types.map { $0 as HKObjectType })
+        readTypes.insert(sleepType)
+        readTypes.insert(workoutType)
         do {
-            try await store.requestAuthorization(toShare: [], read: Set(types))
+            try await store.requestAuthorization(toShare: [], read: readTypes)
             let start = Calendar.current.startOfDay(for: .now)
+            let detailStart = Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? start
             async let heart = latest(.heartRate, unit: HKUnit.count().unitDivided(by: .minute()))
+            async let restingHeart = latest(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()))
             async let hrv = latest(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli))
             async let steps = cumulative(.stepCount, unit: .count(), from: start)
             async let energy = cumulative(.activeEnergyBurned, unit: .kilocalorie(), from: start)
             async let exercise = cumulative(.appleExerciseTime, unit: .minute(), from: start)
-            let values = try await (heart, hrv, steps, energy, exercise)
-            snapshot = WatchHealthSnapshot(heartRate: values.0 ?? 0, hrv: values.1 ?? 0, steps: values.2 ?? 0, activeEnergyKcal: values.3 ?? 0, exerciseMinutes: values.4 ?? 0)
+            async let distance = cumulative(.distanceWalkingRunning, unit: .meter(), from: start)
+            async let sleep = detailedSleepSession(type: sleepType, from: detailStart, to: .now)
+            async let workouts = workoutDetails(from: detailStart, to: .now)
+            let values = try await (heart, restingHeart, hrv, steps, energy, exercise, distance, sleep, workouts)
+            snapshot = WatchHealthSnapshot(
+                sleepMinutes: values.7?.totalMinutes ?? 0, heartRate: values.0 ?? 0, restingHeartRate: values.1 ?? 0,
+                hrv: values.2 ?? 0, steps: values.3 ?? 0, activeEnergyKcal: values.4 ?? 0,
+                exerciseMinutes: values.5 ?? 0, distanceMeters: values.6 ?? 0,
+                sleepSession: values.7, workouts: values.8
+            )
             statusText = snapshot.hasData ? "Watch 직접 수집 켜짐" : "표시할 Watch 기록 없음"
         } catch { statusText = "허용된 Watch 데이터만 사용" }
     }
@@ -78,6 +124,105 @@ final class WatchHealthStore: ObservableObject {
                 continuation.resume(returning: result?.sumQuantity()?.doubleValue(for: unit))
             }
             store.execute(query)
+        }
+    }
+
+    private func detailedSleepSession(type: HKCategoryType, from start: Date, to end: Date) async throws -> WatchSleepSession? {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        let samples: [HKCategorySample] = try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, values, error in
+                if let error { continuation.resume(throwing: error); return }
+                continuation.resume(returning: values as? [HKCategorySample] ?? [])
+            }
+            store.execute(query)
+        }
+        let asleepValues: Set<Int> = [
+            HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
+            HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+            HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+            HKCategoryValueSleepAnalysis.asleepREM.rawValue
+        ]
+        guard let lastAsleep = samples.filter({ asleepValues.contains($0.value) }).max(by: { $0.endDate < $1.endDate }) else { return nil }
+        let windowStart = lastAsleep.endDate.addingTimeInterval(-18 * 60 * 60)
+        let sourceIdentifier = lastAsleep.sourceRevision.source.bundleIdentifier
+        let sessionSamples = samples.filter { $0.sourceRevision.source.bundleIdentifier == sourceIdentifier && $0.endDate > windowStart && $0.startDate <= lastAsleep.endDate }
+        let asleep = sessionSamples.filter { asleepValues.contains($0.value) }
+        guard let startAt = asleep.map(\.startDate).min(), let endAt = asleep.map(\.endDate).max() else { return nil }
+        func minutes(_ values: Set<Int>) -> Int { sessionSamples.filter { values.contains($0.value) }.reduce(0) { $0 + max(0, Int($1.endDate.timeIntervalSince($1.startDate) / 60)) } }
+        return WatchSleepSession(
+            clientSleepId: "sleep-\(Int(startAt.timeIntervalSince1970))-\(Int(endAt.timeIntervalSince1970))",
+            startAt: startAt, endAt: endAt, totalMinutes: minutes(asleepValues),
+            coreMinutes: minutes([HKCategoryValueSleepAnalysis.asleepCore.rawValue]),
+            deepMinutes: minutes([HKCategoryValueSleepAnalysis.asleepDeep.rawValue]),
+            remMinutes: minutes([HKCategoryValueSleepAnalysis.asleepREM.rawValue]),
+            awakeMinutes: minutes([HKCategoryValueSleepAnalysis.awake.rawValue]), source: "WATCH"
+        )
+    }
+
+    private func workoutDetails(from start: Date, to end: Date) async throws -> [WatchWorkoutDetail] {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        let workouts: [HKWorkout] = try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: predicate, limit: 12, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, error in
+                if let error { continuation.resume(throwing: error); return }
+                continuation.resume(returning: samples as? [HKWorkout] ?? [])
+            }
+            store.execute(query)
+        }
+        var result: [WatchWorkoutDetail] = []
+        for workout in workouts {
+            let heart = try await workoutHeartRates(from: workout.startDate, to: workout.endDate)
+            let energy = workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()) ?? 0
+            let duration = workout.duration / 60
+            result.append(WatchWorkoutDetail(
+                clientWorkoutId: workout.uuid.uuidString, activityType: workout.workoutActivityType.morrowName,
+                startAt: workout.startDate, endAt: workout.endDate, durationMinutes: duration,
+                activeEnergyKcal: energy, distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
+                averageHeartRate: heart.average, maxHeartRate: heart.maximum,
+                intensity: workoutIntensity(averageHeartRate: heart.average, energy: energy, durationMinutes: duration), source: "WATCH"
+            ))
+        }
+        return result
+    }
+
+    private func workoutHeartRates(from start: Date, to end: Date) async throws -> (average: Double, maximum: Double) {
+        let heartType = try type(.heartRate)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsQuery(quantityType: heartType, quantitySamplePredicate: predicate, options: [.discreteAverage, .discreteMax]) { _, result, error in
+                if let error { continuation.resume(throwing: error); return }
+                let unit = HKUnit.count().unitDivided(by: .minute())
+                continuation.resume(returning: (result?.averageQuantity()?.doubleValue(for: unit) ?? 0, result?.maximumQuantity()?.doubleValue(for: unit) ?? 0))
+            }
+            store.execute(query)
+        }
+    }
+
+    private func workoutIntensity(averageHeartRate: Double, energy: Double, durationMinutes: Double) -> String {
+        let energyPerMinute = durationMinutes > 0 ? energy / durationMinutes : 0
+        if averageHeartRate >= 140 || energyPerMinute >= 8 { return "HIGH" }
+        if averageHeartRate >= 110 || energyPerMinute >= 4 { return "MODERATE" }
+        return "LIGHT"
+    }
+}
+
+private extension HKWorkoutActivityType {
+    var morrowName: String {
+        switch self {
+        case .walking: return "걷기"
+        case .running: return "달리기"
+        case .cycling: return "사이클링"
+        case .swimming: return "수영"
+        case .hiking: return "하이킹"
+        case .yoga: return "요가"
+        case .traditionalStrengthTraining, .functionalStrengthTraining: return "근력 운동"
+        case .highIntensityIntervalTraining: return "고강도 인터벌"
+        case .dance: return "댄스"
+        case .stairClimbing: return "계단 오르기"
+        case .elliptical: return "일립티컬"
+        case .rowing: return "로잉"
+        case .coreTraining: return "코어 운동"
+        case .cooldown: return "쿨다운"
+        default: return "기타 운동"
         }
     }
 }

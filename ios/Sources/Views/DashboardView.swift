@@ -29,6 +29,7 @@ struct DashboardView: View {
                         MetricCard(title: "이동 거리", value: health.snapshot.distanceText, icon: "map.fill", tint: Theme.accent)
                         MetricCard(title: "호흡수", value: health.snapshot.respiratoryText, icon: "lungs.fill", tint: .cyan)
                     }
+                    healthDetailPanel
 
                     if let recommendation = syncService.currentRecommendation {
                         RecommendationCard(title: recommendation.title, rationale: recommendation.rationale)
@@ -133,6 +134,44 @@ struct DashboardView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder private var healthDetailPanel: some View {
+        if health.snapshot.sleepSession != nil || !health.snapshot.workouts.isEmpty {
+            VStack(alignment: .leading, spacing: 11) {
+                Text("HEALTHKIT DETAILS").morrowKicker()
+                if let sleep = health.snapshot.sleepSession, sleep.totalMinutes > 0 {
+                    HStack(alignment: .top, spacing: 11) {
+                        Image(systemName: "bed.double.fill").foregroundStyle(Color(red: 164 / 255, green: 146 / 255, blue: 238 / 255)).frame(width: 30)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("수면 · \(sleep.intervalText)").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+                            Text("코어 \(sleep.coreMinutes)분 · 깊은 \(sleep.deepMinutes)분 · REM \(sleep.remMinutes)분 · 깨어있음 \(sleep.awakeMinutes)분")
+                                .font(.caption2).foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                }
+                ForEach(health.snapshot.workouts.prefix(3)) { workout in
+                    Divider().overlay(Theme.border)
+                    HStack(alignment: .top, spacing: 11) {
+                        Image(systemName: "figure.run").foregroundStyle(Theme.mint).frame(width: 30)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(workout.activityType) · \(Int(workout.durationMinutes))분 · \(intensityLabel(workout.intensity))")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+                            Text("\(workout.startAt.formatted(date: .omitted, time: .shortened))–\(workout.endAt.formatted(date: .omitted, time: .shortened)) · 평균 심박 \(Int(workout.averageHeartRate)) · 최대 \(Int(workout.maxHeartRate)) bpm")
+                                .font(.caption2).foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                }
+                Text("운동 강도는 심박과 분당 활동 에너지로 추정한 웰니스 참고값입니다.")
+                    .font(.system(size: 9)).foregroundStyle(Theme.textMuted)
+            }
+            .padding(14)
+            .morrowPanel(cornerRadius: 15)
+        }
+    }
+
+    private func intensityLabel(_ value: String) -> String {
+        switch value { case "HIGH": return "높은 강도"; case "MODERATE": return "중간 강도"; default: return "가벼운 강도" }
     }
 
     private var recentSignals: some View {

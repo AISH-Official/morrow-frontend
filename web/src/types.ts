@@ -19,6 +19,7 @@ export type Dashboard={
  scoreReasons:string[];
  lastUpdatedAt:string|null;
  metrics:{sleepMinutes:number;restingHeartRate:number;hrv:number;steps:number;activeEnergyKcal:number;exerciseMinutes:number};
+ healthDetails:{sleep:SleepDetail|null;workouts:WorkoutDetail[]};
  timeline:TimelineItem[];
  recommendation:Recommendation|null;
  disclaimer:string;
@@ -45,12 +46,16 @@ export type CheckInCause='SLEEP'|'WORK'|'STUDY'|'RELATIONSHIP'|'PHYSICAL'|'UNKNO
 
 export type CheckInInput={
  userId:string;
+ clientEventId:string;
  status:CheckInStatus;
  cause:CheckInCause;
  note:string;
  source:'WEB';
  recordedAt:string;
 };
+
+export type SleepDetail={clientSleepId:string;startAt:string;endAt:string;totalMinutes:number;coreMinutes:number;deepMinutes:number;remMinutes:number;awakeMinutes:number;source:string};
+export type WorkoutDetail={clientWorkoutId:string;activityType:string;startAt:string;endAt:string;durationMinutes:number;activeEnergyKcal:number;distanceMeters:number;averageHeartRate:number;maxHeartRate:number;intensity:'LIGHT'|'MODERATE'|'HIGH';source:string};
 
 export type ConnectionMode='live'|'offline';
 

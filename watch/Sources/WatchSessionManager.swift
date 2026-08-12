@@ -60,13 +60,22 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     func sendHealthSummary(_ snapshot: WatchHealthSnapshot) {
         guard WCSession.default.activationState == .activated, snapshot.hasData else { return }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let sleepJSON = snapshot.sleepSession.flatMap { try? encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        let workoutsJSON = (try? encoder.encode(snapshot.workouts)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         WCSession.default.transferUserInfo([
             "kind": "healthSummary",
+            "sleepMinutes": snapshot.sleepMinutes,
             "heartRate": snapshot.heartRate,
+            "restingHeartRate": snapshot.restingHeartRate,
             "hrv": snapshot.hrv,
             "steps": snapshot.steps,
             "activeEnergyKcal": snapshot.activeEnergyKcal,
             "exerciseMinutes": snapshot.exerciseMinutes,
+            "distanceMeters": snapshot.distanceMeters,
+            "sleepSessionJSON": sleepJSON,
+            "workoutsJSON": workoutsJSON,
             "recordedAt": ISO8601DateFormatter().string(from: Date())
         ])
     }

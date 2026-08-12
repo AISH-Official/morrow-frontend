@@ -1,6 +1,37 @@
 import SwiftUI
 import SwiftData
 
+struct SleepSessionDetail: Codable, Hashable {
+    let clientSleepId: String
+    let startAt: Date
+    let endAt: Date
+    let totalMinutes: Int
+    let coreMinutes: Int
+    let deepMinutes: Int
+    let remMinutes: Int
+    let awakeMinutes: Int
+    let source: String
+
+    var intervalText: String {
+        "\(startAt.formatted(date: .omitted, time: .shortened))–\(endAt.formatted(date: .omitted, time: .shortened))"
+    }
+}
+
+struct WorkoutDetail: Codable, Hashable, Identifiable {
+    var id: String { clientWorkoutId }
+    let clientWorkoutId: String
+    let activityType: String
+    let startAt: Date
+    let endAt: Date
+    let durationMinutes: Double
+    let activeEnergyKcal: Double
+    let distanceMeters: Double
+    let averageHeartRate: Double
+    let maxHeartRate: Double
+    let intensity: String
+    let source: String
+}
+
 struct HealthSnapshot {
     var sleepMinutes: Int = 0
     var heartRate: Double = 0
@@ -16,6 +47,8 @@ struct HealthSnapshot {
     var baselineSleepMinutes: Int = 0
     var baselineRestingHeartRate: Double = 0
     var baselineHRV: Double = 0
+    var sleepSession: SleepSessionDetail?
+    var workouts: [WorkoutDetail] = []
     var hasHealthData = false
 
     var sleepText: String {

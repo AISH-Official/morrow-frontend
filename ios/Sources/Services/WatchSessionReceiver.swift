@@ -10,11 +10,16 @@ struct IncomingWatchCheckIn: Codable {
 }
 
 struct IncomingWatchHealthSummary: Codable {
+    let sleepMinutes: Int
     let heartRate: Double
+    let restingHeartRate: Double
     let hrv: Double
     let steps: Double
     let activeEnergyKcal: Double
     let exerciseMinutes: Double
+    let distanceMeters: Double
+    let sleepSession: SleepSessionDetail?
+    let workouts: [WorkoutDetail]
     let recordedAt: Date
 }
 
@@ -102,12 +107,23 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
         if userInfo["kind"] as? String == "healthSummary" {
             let date = (userInfo["recordedAt"] as? String).flatMap(ISO8601DateFormatter().date(from:)) ?? .now
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let sleepData = (userInfo["sleepSessionJSON"] as? String)?.data(using: .utf8)
+            let workoutData = (userInfo["workoutsJSON"] as? String)?.data(using: .utf8)
+            let sleep = sleepData.flatMap { try? decoder.decode(SleepSessionDetail.self, from: $0) }
+            let workouts = workoutData.flatMap { try? decoder.decode([WorkoutDetail].self, from: $0) } ?? []
             let summary = IncomingWatchHealthSummary(
+                sleepMinutes: userInfo["sleepMinutes"] as? Int ?? sleep?.totalMinutes ?? 0,
                 heartRate: userInfo["heartRate"] as? Double ?? 0,
+                restingHeartRate: userInfo["restingHeartRate"] as? Double ?? 0,
                 hrv: userInfo["hrv"] as? Double ?? 0,
                 steps: userInfo["steps"] as? Double ?? 0,
                 activeEnergyKcal: userInfo["activeEnergyKcal"] as? Double ?? 0,
                 exerciseMinutes: userInfo["exerciseMinutes"] as? Double ?? 0,
+                distanceMeters: userInfo["distanceMeters"] as? Double ?? 0,
+                sleepSession: sleep,
+                workouts: workouts,
                 recordedAt: date
             )
             var inbox = (UserDefaults.standard.data(forKey: healthInboxKey)).flatMap { try? JSONDecoder().decode([IncomingWatchHealthSummary].self, from: $0) } ?? []
