@@ -154,9 +154,9 @@ export async function createCheckIn(input:CheckInInput):Promise<{id:string}>{
  return request<{id:string}>('/check-ins',{method:'POST',body:JSON.stringify({...input,userId:session.userId})});
 }
 
-export async function submitRecommendationFeedback(id:string,helpful:boolean):Promise<void>{
+export async function submitRecommendationFeedback(id:string,helpful:boolean,completed=true):Promise<void>{
  if(id.startsWith('walk-'))return;
- await request(`/recommendations/${id}/feedback`,{method:'POST',body:JSON.stringify({completed:true,helpful,note:helpful?'도움이 됐어요':'다른 제안이 필요해요'})});
+ await request(`/recommendations/${id}/feedback`,{method:'POST',body:JSON.stringify({completed,helpful,note:completed?(helpful?'도움이 됐어요':'실행 후 큰 변화가 없었어요'):'다른 제안이 필요해요'})});
 }
 
 export async function createRecoveryAttempt(action:RecoveryAction,reason:string,confidence:string):Promise<{id:string}>{
