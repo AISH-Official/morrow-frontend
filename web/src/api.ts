@@ -2,6 +2,7 @@ import type{AssistantResult,CheckInInput,Dashboard,PersonalizationProfile,Recove
 
 const API_ROOT=import.meta.env.VITE_API_BASE_URL||'/api/v1';
 const REQUEST_TIMEOUT=30000;
+const ASSISTANT_REQUEST_TIMEOUT=45000;
 const SESSION_KEY='morrow.web.session.v2';
 const LEGACY_SESSION_KEY='morrow.web.session.v1';
 const INSTALLATION_KEY='morrow.web.installation.v1';
@@ -19,9 +20,9 @@ export class ApiRequestError extends Error{
 
 export function isSessionExpired(error:unknown):boolean{return error instanceof SessionExpiredError}
 
-async function rawRequest<T>(path:string,init?:RequestInit,authenticated=true):Promise<T>{
+async function rawRequest<T>(path:string,init?:RequestInit,authenticated=true,timeout=REQUEST_TIMEOUT):Promise<T>{
  const controller=new AbortController();
- const timer=window.setTimeout(()=>controller.abort(),REQUEST_TIMEOUT);
+ const timer=window.setTimeout(()=>controller.abort(),timeout);
  try{
   const session=authenticated?storedSession():null;
   if(authenticated&&!session)throw new SessionExpiredError();
@@ -94,7 +95,7 @@ export async function logoutWebSession():Promise<void>{
  }
 }
 
-async function request<T>(path:string,init?:RequestInit):Promise<T>{return rawRequest<T>(path,init,true)}
+async function request<T>(path:string,init?:RequestInit,timeout=REQUEST_TIMEOUT):Promise<T>{return rawRequest<T>(path,init,true,timeout)}
 
 async function userPath(path:string):Promise<string>{const session=await getWebSession();return `${path}${path.includes('?')?'&':'?'}userId=${encodeURIComponent(session.userId)}`}
 
@@ -120,9 +121,9 @@ export async function getWeeklyReport():Promise<WeeklyReport>{
 
 export async function sendAssistantMessage(content:string):Promise<AssistantResult>{
  try{
-  const session=await getWebSession();const result=await request<AssistantResult>('/assistant/messages',{method:'POST',body:JSON.stringify({userId:session.userId,content})});
+  const session=await getWebSession();const result=await request<AssistantResult>('/assistant/messages',{method:'POST',body:JSON.stringify({userId:session.userId,content})},ASSISTANT_REQUEST_TIMEOUT);
   return{...result,content:normalizeAssistantText(result.content)};
- }catch(error){if(isSessionExpired(error))throw error;return{content:localAssistantResponse(content),aiMode:'LOCAL',personalizationEvidenceCount:0,personalized:false}}
+ }catch(error){if(isSessionExpired(error)||error instanceof ApiRequestError&&error.status<500)throw error;return{content:localAssistantResponse(content),aiMode:'LOCAL',personalizationEvidenceCount:0,personalized:false}}
 }
 
 export async function clearAssistantConversation():Promise<void>{await request(await userPath('/assistant/messages'),{method:'DELETE'})}

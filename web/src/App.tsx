@@ -108,7 +108,7 @@ export default function App(){
   const clean=text.trim();if(!clean||phase==='thinking'||phase==='speaking')return;
   recognition.current?.stop();window.speechSynthesis?.cancel();setChats(value=>[...value,{id:nextId.current++,role:'user',text:clean}]);setMessage('');setPhase('thinking');
   try{const result=await sendAssistantMessage(clean);setAiMode(result.aiMode);if(result.personalized)setPersonalization(value=>value?{...value,evidenceCount:Math.max(value.evidenceCount,result.personalizationEvidenceCount),personalized:true}:value);streamAnswer(result.content)}
-  catch(error){setPhase('idle');if(isSessionExpired(error))expireSession();else setToast('AI 연결을 확인한 뒤 다시 시도해 주세요.')}
+  catch(error){setPhase('idle');if(isSessionExpired(error))expireSession();else if(error instanceof ApiRequestError&&error.status===429)setToast('메시지가 많아요. 잠시 뒤 다시 보내 주세요.');else setToast('메시지를 보내지 못했어요. 잠시 후 다시 시도해 주세요.')}
  }
 
  function toggleMic(){
