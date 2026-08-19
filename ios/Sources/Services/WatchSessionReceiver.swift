@@ -50,7 +50,7 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
         return values
     }
 
-    func sendWellnessContext(score: Int, summary: String, snapshot: HealthSnapshot, recommendation: NativeRecommendation?) {
+    func sendWellnessContext(score: Int, summary: String, snapshot: HealthSnapshot, recommendation: NativeRecommendation?, syncDerivedHealth: Bool) {
         var context: [String: Any] = pendingContext ?? [:]
         context["score"] = score
         context["summary"] = summary
@@ -66,6 +66,7 @@ final class WatchSessionReceiver: NSObject, ObservableObject, WCSessionDelegate 
         context["recommendationAction"] = recommendation?.action ?? ""
         context["recommendationDuration"] = recommendation?.durationSeconds ?? 0
         context["recommendationSource"] = recommendation?.source ?? "RULE"
+        context["syncDerivedHealth"] = syncDerivedHealth
         context["updatedAt"] = ISO8601DateFormatter().string(from: Date())
         pendingContext = context
         guard WCSession.default.activationState == .activated else { return }

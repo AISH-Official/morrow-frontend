@@ -2,12 +2,13 @@ import SwiftUI
 import HealthKit
 import UserNotifications
 import WatchKit
+import WatchConnectivity
 
 @main
 struct MorrowWatchApp: App {
     @WKExtensionDelegateAdaptor(MorrowWatchExtensionDelegate.self) private var extensionDelegate
-    @StateObject private var session = WatchSessionManager()
-    @StateObject private var health = WatchHealthStore()
+    @StateObject private var session = WatchSessionManager.shared
+    @StateObject private var health = WatchHealthStore.shared
     @StateObject private var notifications = WatchNotificationManager.shared
 
     var body: some Scene {
@@ -20,7 +21,7 @@ struct MorrowWatchApp: App {
     }
 }
 
-struct WatchHealthSnapshot {
+struct WatchHealthSnapshot: Sendable {
     var sleepMinutes = 0
     var heartRate = 0.0
     var restingHeartRate = 0.0
@@ -34,7 +35,7 @@ struct WatchHealthSnapshot {
     var hasData: Bool { sleepMinutes > 0 || heartRate > 0 || hrv > 0 || steps > 0 || activeEnergyKcal > 0 || exerciseMinutes > 0 || !workouts.isEmpty }
 }
 
-struct WatchSleepSession: Codable {
+struct WatchSleepSession: Codable, Sendable {
     let clientSleepId: String
     let startAt: Date
     let endAt: Date
@@ -46,7 +47,7 @@ struct WatchSleepSession: Codable {
     let source: String
 }
 
-struct WatchWorkoutDetail: Codable {
+struct WatchWorkoutDetail: Codable, Sendable {
     let clientWorkoutId: String
     let activityType: String
     let startAt: Date
@@ -62,41 +63,119 @@ struct WatchWorkoutDetail: Codable {
 
 @MainActor
 final class WatchHealthStore: ObservableObject {
+    static let shared = WatchHealthStore()
+
     @Published private(set) var snapshot = WatchHealthSnapshot()
     @Published private(set) var statusText = "Watch 건강 데이터 확인 전"
     private let store = HKHealthStore()
+    private var observerQueries: [HKObserverQuery] = []
+    private var backgroundConfigured = false
+    private var authorizationRequested = false
+    private var observerRefreshTask: Task<Void, Never>?
+    private var observerCompletions: [() -> Void] = []
 
     func requestAuthorizationAndLoad() async {
         guard HKHealthStore.isHealthDataAvailable() else { statusText = "HealthKit 사용 불가"; return }
-        let identifiers: [HKQuantityTypeIdentifier] = [.heartRate, .restingHeartRate, .heartRateVariabilitySDNN, .stepCount, .activeEnergyBurned, .appleExerciseTime, .distanceWalkingRunning]
-        let types = identifiers.compactMap(HKQuantityType.quantityType(forIdentifier:))
-        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { statusText = "수면 데이터 형식 미지원"; return }
-        let workoutType = HKObjectType.workoutType()
-        var readTypes = Set<HKObjectType>(types.map { $0 as HKObjectType })
-        readTypes.insert(sleepType)
-        readTypes.insert(workoutType)
+        let types = healthTypes()
         do {
-            try await store.requestAuthorization(toShare: [], read: readTypes)
-            let start = Calendar.current.startOfDay(for: .now)
-            let detailStart = Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? start
-            async let heart = latest(.heartRate, unit: HKUnit.count().unitDivided(by: .minute()))
-            async let restingHeart = latest(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()))
-            async let hrv = latest(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli))
-            async let steps = cumulative(.stepCount, unit: .count(), from: start)
-            async let energy = cumulative(.activeEnergyBurned, unit: .kilocalorie(), from: start)
-            async let exercise = cumulative(.appleExerciseTime, unit: .minute(), from: start)
-            async let distance = cumulative(.distanceWalkingRunning, unit: .meter(), from: start)
-            async let sleep = detailedSleepSession(type: sleepType, from: detailStart, to: .now)
-            async let workouts = workoutDetails(from: detailStart, to: .now)
-            let values = try await (heart, restingHeart, hrv, steps, energy, exercise, distance, sleep, workouts)
-            snapshot = WatchHealthSnapshot(
-                sleepMinutes: values.7?.totalMinutes ?? 0, heartRate: values.0 ?? 0, restingHeartRate: values.1 ?? 0,
-                hrv: values.2 ?? 0, steps: values.3 ?? 0, activeEnergyKcal: values.4 ?? 0,
-                exerciseMinutes: values.5 ?? 0, distanceMeters: values.6 ?? 0,
-                sleepSession: values.7, workouts: values.8
-            )
+            if !authorizationRequested {
+                try await store.requestAuthorization(toShare: [], read: types.read)
+                authorizationRequested = true
+            }
+            snapshot = try await loadSnapshot(sleepType: types.sleep)
+            configureBackgroundDelivery(types: types.observed)
             statusText = snapshot.hasData ? "Watch 직접 수집 켜짐" : "표시할 Watch 기록 없음"
         } catch { statusText = "허용된 Watch 데이터만 사용" }
+    }
+
+    @discardableResult
+    func refreshFromBackground() async -> Bool {
+        guard HKHealthStore.isHealthDataAvailable() else { return false }
+        let types = healthTypes()
+        configureBackgroundDelivery(types: types.observed)
+        do {
+            snapshot = try await loadSnapshot(sleepType: types.sleep)
+            return await synchronizeCurrentSnapshot()
+        } catch {
+            statusText = "Watch 백그라운드 재시도 대기 중"
+            return false
+        }
+    }
+
+    @discardableResult
+    func synchronizeCurrentSnapshot() async -> Bool {
+        guard snapshot.hasData else { return false }
+        guard UserDefaults.standard.object(forKey: "morrow.sync.derivedHealth") as? Bool != false else {
+            statusText = "건강 요약 동기화 꺼짐"
+            return true
+        }
+        WatchSessionManager.shared.sendHealthSummary(snapshot)
+        let uploaded = await WatchHealthUploader.shared.upload(snapshot)
+        statusText = uploaded ? "Watch 백그라운드 동기화 완료" : "iPhone 전달 대기 중"
+        return uploaded || WCSession.default.activationState == .activated
+    }
+
+    func prepareBackgroundDelivery() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        configureBackgroundDelivery(types: healthTypes().observed)
+    }
+
+    private func loadSnapshot(sleepType: HKCategoryType) async throws -> WatchHealthSnapshot {
+        let start = Calendar.current.startOfDay(for: .now)
+        let detailStart = Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? start
+        async let heart = latest(.heartRate, unit: HKUnit.count().unitDivided(by: .minute()))
+        async let restingHeart = latest(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()))
+        async let hrv = latest(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli))
+        async let steps = cumulative(.stepCount, unit: .count(), from: start)
+        async let energy = cumulative(.activeEnergyBurned, unit: .kilocalorie(), from: start)
+        async let exercise = cumulative(.appleExerciseTime, unit: .minute(), from: start)
+        async let distance = cumulative(.distanceWalkingRunning, unit: .meter(), from: start)
+        async let sleep = detailedSleepSession(type: sleepType, from: detailStart, to: .now)
+        async let workouts = workoutDetails(from: detailStart, to: .now)
+        let values = try await (heart, restingHeart, hrv, steps, energy, exercise, distance, sleep, workouts)
+        return WatchHealthSnapshot(
+            sleepMinutes: values.7?.totalMinutes ?? 0, heartRate: values.0 ?? 0, restingHeartRate: values.1 ?? 0,
+            hrv: values.2 ?? 0, steps: values.3 ?? 0, activeEnergyKcal: values.4 ?? 0,
+            exerciseMinutes: values.5 ?? 0, distanceMeters: values.6 ?? 0,
+            sleepSession: values.7, workouts: values.8
+        )
+    }
+
+    private func configureBackgroundDelivery(types: [HKSampleType]) {
+        guard !backgroundConfigured else { return }
+        backgroundConfigured = true
+        for type in types {
+            store.enableBackgroundDelivery(for: type, frequency: .immediate) { _, _ in }
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
+                Task { @MainActor in self?.enqueueObservedChange(completion: completion) }
+            }
+            observerQueries.append(query)
+            store.execute(query)
+        }
+    }
+
+    private func enqueueObservedChange(completion: @escaping () -> Void) {
+        observerCompletions.append(completion)
+        observerRefreshTask?.cancel()
+        observerRefreshTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            guard let self else { return }
+            _ = await self.refreshFromBackground()
+            let completions = self.observerCompletions
+            self.observerCompletions.removeAll()
+            completions.forEach { $0() }
+        }
+    }
+
+    private func healthTypes() -> (read: Set<HKObjectType>, observed: [HKSampleType], sleep: HKCategoryType) {
+        let identifiers: [HKQuantityTypeIdentifier] = [.heartRate, .restingHeartRate, .heartRateVariabilitySDNN, .stepCount, .activeEnergyBurned, .appleExerciseTime, .distanceWalkingRunning]
+        let quantityTypes = identifiers.compactMap(HKQuantityType.quantityType(forIdentifier:))
+        let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+        let workout = HKObjectType.workoutType()
+        var readTypes = Set<HKObjectType>(quantityTypes.map { $0 as HKObjectType })
+        readTypes.insert(sleep)
+        readTypes.insert(workout)
+        return (readTypes, quantityTypes.map { $0 as HKSampleType } + [sleep, workout], sleep)
     }
 
     private func type(_ id: HKQuantityTypeIdentifier) throws -> HKQuantityType {

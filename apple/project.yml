@@ -9,7 +9,7 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "2"
+    CURRENT_PROJECT_VERSION: "5"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: 4UTM2VZ53U
 targets:
@@ -37,12 +37,16 @@ targets:
               NSExceptionAllowsInsecureHTTPLoads: true
         UILaunchScreen: {}
         UIBackgroundModes:
+          - fetch
           - remote-notification
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.qlsl1198.morrowwellness.health-refresh
     entitlements:
       path: Morrow/Morrow.entitlements
       properties:
         aps-environment: development
         com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.qlsl1198.morrowwellness
@@ -83,6 +87,7 @@ targets:
       properties:
         aps-environment: development
         com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.qlsl1198.morrowwellness.watchkitapp

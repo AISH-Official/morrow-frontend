@@ -4,6 +4,8 @@ import HealthKit
 
 @MainActor
 final class HealthStore: ObservableObject {
+    static let shared = HealthStore()
+
     @Published private(set) var snapshot = HealthSnapshot()
     @Published private(set) var authorizationMessage = "HealthKit 연결 전"
     @Published private(set) var isLoading = false
@@ -12,6 +14,9 @@ final class HealthStore: ObservableObject {
     private let isStoreScreenshotMode: Bool
     private var observerQueries: [HKObserverQuery] = []
     private var backgroundConfigured = false
+    private var authorizationRequested = false
+    private var observerRefreshTask: Task<Void, Never>?
+    private var observerCompletions: [() -> Void] = []
 
     init() {
         isStoreScreenshotMode = ProcessInfo.processInfo.environment["MORROW_STORE_SCREENSHOTS"] == "1"
@@ -44,24 +49,16 @@ final class HealthStore: ObservableObject {
             authorizationMessage = "이 기기에서는 HealthKit을 사용할 수 없습니다."
             return
         }
-        let identifiers: [HKQuantityTypeIdentifier] = [
-            .heartRate, .restingHeartRate, .heartRateVariabilitySDNN, .stepCount,
-            .activeEnergyBurned, .appleExerciseTime, .distanceWalkingRunning, .flightsClimbed,
-            .respiratoryRate, .oxygenSaturation
-        ]
-        let quantityTypes = identifiers.compactMap(HKQuantityType.quantityType(forIdentifier:))
-        guard let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return }
-        let workout = HKObjectType.workoutType()
-        var readTypes = Set<HKObjectType>(quantityTypes.map { $0 as HKObjectType })
-        readTypes.insert(sleep)
-        readTypes.insert(workout)
-        let observedTypes: [HKSampleType] = quantityTypes.map { $0 as HKSampleType } + [sleep, workout]
+        let types = healthTypes()
         isLoading = true
         defer { isLoading = false }
         do {
-            try await store.requestAuthorization(toShare: [], read: readTypes)
-            snapshot = try await loadSnapshot(sleepType: sleep)
-            configureBackgroundDelivery(types: observedTypes)
+            if !authorizationRequested {
+                try await store.requestAuthorization(toShare: [], read: types.read)
+                authorizationRequested = true
+            }
+            snapshot = try await loadSnapshot(sleepType: types.sleep)
+            configureBackgroundDelivery(types: types.observed)
             lastUpdated = .now
             authorizationMessage = snapshot.hasHealthData ? "허용된 데이터만 기기에서 분석합니다." : "표시할 HealthKit 기록이 아직 없습니다."
         } catch {
@@ -73,20 +70,75 @@ final class HealthStore: ObservableObject {
         await requestAuthorizationAndLoad()
     }
 
+    /// HealthKit observers and system refresh use this path so an authorization
+    /// sheet is never presented while the app is in the background.
+    @discardableResult
+    func refreshFromBackground(uploadToServer: Bool = true) async -> Bool {
+        guard !isStoreScreenshotMode, HKHealthStore.isHealthDataAvailable() else { return false }
+        let types = healthTypes()
+        configureBackgroundDelivery(types: types.observed)
+        do {
+            snapshot = try await loadSnapshot(sleepType: types.sleep)
+            lastUpdated = .now
+            authorizationMessage = snapshot.hasHealthData ? "백그라운드 건강 동기화 켜짐" : "표시할 HealthKit 기록이 아직 없습니다."
+            if uploadToServer,
+               snapshot.hasHealthData,
+               UserDefaults.standard.object(forKey: "morrow.sync.derivedHealth") as? Bool != false {
+                return await MorrowSyncService.shared.synchronizeHealthSnapshot(snapshot)
+            }
+            return snapshot.hasHealthData
+        } catch {
+            authorizationMessage = "백그라운드 동기화 재시도 대기 중"
+            return false
+        }
+    }
+
+    func prepareBackgroundDelivery() {
+        guard !isStoreScreenshotMode, HKHealthStore.isHealthDataAvailable() else { return }
+        configureBackgroundDelivery(types: healthTypes().observed)
+    }
+
     private func configureBackgroundDelivery(types: [HKSampleType]) {
         guard !backgroundConfigured else { return }
         backgroundConfigured = true
         for type in types {
-            store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
+            store.enableBackgroundDelivery(for: type, frequency: .immediate) { _, _ in }
             let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
                 Task { @MainActor in
-                    await self?.refresh()
-                    completion()
+                    self?.enqueueObservedChange(completion: completion)
                 }
             }
             observerQueries.append(query)
             store.execute(query)
         }
+    }
+
+    private func enqueueObservedChange(completion: @escaping () -> Void) {
+        observerCompletions.append(completion)
+        observerRefreshTask?.cancel()
+        observerRefreshTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            guard let self else { return }
+            _ = await self.refreshFromBackground()
+            let completions = self.observerCompletions
+            self.observerCompletions.removeAll()
+            completions.forEach { $0() }
+        }
+    }
+
+    private func healthTypes() -> (read: Set<HKObjectType>, observed: [HKSampleType], sleep: HKCategoryType) {
+        let identifiers: [HKQuantityTypeIdentifier] = [
+            .heartRate, .restingHeartRate, .heartRateVariabilitySDNN, .stepCount,
+            .activeEnergyBurned, .appleExerciseTime, .distanceWalkingRunning, .flightsClimbed,
+            .respiratoryRate, .oxygenSaturation
+        ]
+        let quantityTypes = identifiers.compactMap(HKQuantityType.quantityType(forIdentifier:))
+        let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+        let workout = HKObjectType.workoutType()
+        var readTypes = Set<HKObjectType>(quantityTypes.map { $0 as HKObjectType })
+        readTypes.insert(sleep)
+        readTypes.insert(workout)
+        return (readTypes, quantityTypes.map { $0 as HKSampleType } + [sleep, workout], sleep)
     }
 
     private func loadSnapshot(sleepType: HKCategoryType) async throws -> HealthSnapshot {
