@@ -6,8 +6,8 @@ import UIKit
 @main
 struct MorrowApp: App {
     @UIApplicationDelegateAdaptor(MorrowAppDelegate.self) private var appDelegate
-    @StateObject private var healthStore = HealthStore()
-    @StateObject private var syncService = MorrowSyncService()
+    @StateObject private var healthStore = HealthStore.shared
+    @StateObject private var syncService = MorrowSyncService.shared
     @StateObject private var notificationManager = PhoneNotificationManager()
     var body: some Scene {
         WindowGroup {
@@ -180,7 +180,12 @@ private struct AuthenticatedRootView: View {
             .onChange(of: checkInSignature) { _, _ in Task { await synchronize() } }
             .onChange(of: syncService.recoveryScore) { _, _ in syncWatchContext() }
             .onChange(of: syncService.currentRecommendation?.id) { _, _ in syncWatchContext() }
-            .onChange(of: scenePhase) { _, phase in if phase == .active { importWatchCheckIns(); syncWatchContext(); handlePendingNotificationAction(); Task { await synchronize() } } }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    importWatchCheckIns(); syncWatchContext(); handlePendingNotificationAction()
+                    Task { await healthStore.refresh(); await synchronize() }
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("morrow.phone.action"))) { _ in handlePendingNotificationAction() }
             .sheet(item: $pendingRecovery) { RecoveryActionView(launch: $0) }
             .sheet(isPresented: $showNotificationCheckIn) { NavigationStack { CheckInView() } }
@@ -234,7 +239,8 @@ private struct AuthenticatedRootView: View {
             score: score,
             summary: RecoveryLevel(score: score).label,
             snapshot: healthStore.snapshot,
-            recommendation: syncService.currentRecommendation
+            recommendation: syncService.currentRecommendation,
+            syncDerivedHealth: syncDerivedHealth
         )
         Task {
             if let connection = try? await MorrowAPIClient.shared.connectionContext() {
@@ -257,6 +263,8 @@ private struct AuthenticatedRootView: View {
 
 @MainActor
 final class MorrowSyncService: ObservableObject {
+    static let shared = MorrowSyncService()
+
     enum State { case idle, syncing, synced(Date), failed(String) }
     @Published private(set) var state: State = .idle
     @Published private(set) var recoveryScore: Int?
@@ -315,6 +323,23 @@ final class MorrowSyncService: ObservableObject {
             currentRecommendation = dashboard.recommendation
             state = .synced(.now)
         } catch { state = .failed(error.localizedDescription) }
+    }
+
+    @discardableResult
+    func synchronizeHealthSnapshot(_ snapshot: HealthSnapshot) async -> Bool {
+        guard snapshot.hasHealthData else { return false }
+        state = .syncing
+        do {
+            try await upload(snapshot)
+            let dashboard = try await client.dashboard()
+            recoveryScore = dashboard.score
+            currentRecommendation = dashboard.recommendation
+            state = .synced(.now)
+            return true
+        } catch {
+            state = .failed(error.localizedDescription)
+            return false
+        }
     }
 
     private func upload(_ record: CheckInRecord) async throws {

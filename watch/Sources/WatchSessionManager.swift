@@ -27,15 +27,20 @@ struct WatchRecentCheckIn {
 }
 
 final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
+    static let shared = WatchSessionManager()
+
     @Published private(set) var context = WatchWellnessContext()
     @Published private(set) var recentCheckIn: WatchRecentCheckIn?
     @Published private(set) var isConnected = false
     @Published private(set) var isServerConnected = false
     @Published private(set) var pairingCode = ""
+    private let pendingHealthKey = "morrow.watch.health.pendingTransfer"
+    private var pendingHealthSummary: [String: Any]?
 
     override init() {
         super.init()
         restoreRecentCheckIn()
+        pendingHealthSummary = UserDefaults.standard.dictionary(forKey: pendingHealthKey)
         isServerConnected = WatchConnectionStore.load() != nil
         if WCSession.isSupported() {
             WCSession.default.delegate = self
@@ -63,12 +68,12 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     func sendHealthSummary(_ snapshot: WatchHealthSnapshot) {
-        guard WCSession.default.activationState == .activated, snapshot.hasData else { return }
+        guard snapshot.hasData else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let sleepJSON = snapshot.sleepSession.flatMap { try? encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
         let workoutsJSON = (try? encoder.encode(snapshot.workouts)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-        WCSession.default.transferUserInfo([
+        let payload: [String: Any] = [
             "kind": "healthSummary",
             "sleepMinutes": snapshot.sleepMinutes,
             "heartRate": snapshot.heartRate,
@@ -81,7 +86,13 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             "sleepSessionJSON": sleepJSON,
             "workoutsJSON": workoutsJSON,
             "recordedAt": ISO8601DateFormatter().string(from: Date())
-        ])
+        ]
+        guard WCSession.default.activationState == .activated else {
+            pendingHealthSummary = payload
+            UserDefaults.standard.set(payload, forKey: pendingHealthKey)
+            return
+        }
+        transferHealthSummary(payload)
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
@@ -91,8 +102,17 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         DispatchQueue.main.async {
             self.isConnected = activationState == .activated
+            if activationState == .activated, let pending = self.pendingHealthSummary {
+                self.transferHealthSummary(pending)
+            }
             if !session.receivedApplicationContext.isEmpty { self.apply(session.receivedApplicationContext) }
         }
+    }
+
+    private func transferHealthSummary(_ payload: [String: Any]) {
+        WCSession.default.transferUserInfo(payload)
+        pendingHealthSummary = nil
+        UserDefaults.standard.removeObject(forKey: pendingHealthKey)
     }
 
     func sessionReachabilityDidChange(_ session: WCSession) {
@@ -119,6 +139,9 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
            let dateValue = values["aiInsightAt"] as? String,
            let generatedAt = ISO8601DateFormatter().date(from: dateValue) {
             Task { await WatchNotificationManager.shared.aiInsight(title: title, body: body, generatedAt: generatedAt) }
+        }
+        if let syncDerivedHealth = values["syncDerivedHealth"] as? Bool {
+            UserDefaults.standard.set(syncDerivedHealth, forKey: "morrow.sync.derivedHealth")
         }
         DispatchQueue.main.async {
             self.isServerConnected = values["apiRoot"] as? String != nil && values["accessToken"] as? String != nil

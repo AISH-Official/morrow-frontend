@@ -1,7 +1,10 @@
 import UIKit
 import UserNotifications
+import BackgroundTasks
 
 final class MorrowAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    private static let healthRefreshTaskIdentifier = "com.qlsl1198.morrowwellness.health-refresh"
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         let recovery = UNNotificationAction(identifier: "START_RECOVERY", title: "지금 시작", options: [.foreground])
@@ -10,7 +13,40 @@ final class MorrowAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             UNNotificationCategory(identifier: "MORROW_ACTION", actions: [recovery], intentIdentifiers: []),
             UNNotificationCategory(identifier: "MORROW_CHECKIN", actions: [checkIn], intentIdentifiers: [])
         ])
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.healthRefreshTaskIdentifier, using: nil) { task in
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self.handleHealthRefresh(refreshTask)
+        }
+        scheduleHealthRefresh()
+        Task { @MainActor in HealthStore.shared.prepareBackgroundDelivery() }
         return true
+    }
+
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        scheduleHealthRefresh()
+    }
+
+    private func scheduleHealthRefresh() {
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.healthRefreshTaskIdentifier)
+        let request = BGAppRefreshTaskRequest(identifier: Self.healthRefreshTaskIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    private func handleHealthRefresh(_ task: BGAppRefreshTask) {
+        scheduleHealthRefresh()
+        let operation = Task { @MainActor in
+            let success = await HealthStore.shared.refreshFromBackground()
+            guard !Task.isCancelled else { return }
+            task.setTaskCompleted(success: success)
+        }
+        task.expirationHandler = {
+            operation.cancel()
+            task.setTaskCompleted(success: false)
+        }
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

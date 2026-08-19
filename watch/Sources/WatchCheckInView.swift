@@ -53,10 +53,15 @@ struct WatchCheckInView: View {
         .tint(WatchTheme.accent)
         .task {
             await health.requestAuthorizationAndLoad()
-            session.sendHealthSummary(health.snapshot)
+            _ = await health.synchronizeCurrentSnapshot()
             await notifications.configure()
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { openPendingNotificationAction() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                openPendingNotificationAction()
+                Task { _ = await health.refreshFromBackground() }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("morrow.watch.action"))) { _ in openPendingNotificationAction() }
         .onAppear { openPendingNotificationAction() }
         .onOpenURL { url in if url.host == "recovery" { notificationPath = ["RECOVERY"] } }
@@ -158,7 +163,7 @@ struct WatchCheckInView: View {
             NavigationLink(destination: RecoverySessionView(launch: .breath)) { action("1분 회복", "wind", WatchTheme.mint) }.buttonStyle(.plain)
             NavigationLink(destination: WatchAssistantView()) { action("AI 대화", "sparkles", WatchTheme.accent) }.buttonStyle(.plain)
             Button {
-                Task { await health.requestAuthorizationAndLoad(); session.sendHealthSummary(health.snapshot) }
+                Task { await health.requestAuthorizationAndLoad(); _ = await health.synchronizeCurrentSnapshot() }
             } label: { action("데이터 갱신", "arrow.clockwise.heart.fill", .orange) }.buttonStyle(.plain)
             NavigationLink(destination: WatchNotificationSettingsView()) { action("알림", "bell.badge.fill", .purple) }.buttonStyle(.plain)
         }

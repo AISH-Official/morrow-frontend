@@ -17,6 +17,43 @@ final class MorrowWatchExtensionDelegate: NSObject, WKExtensionDelegate, UNUserN
         let recoveryCategory = UNNotificationCategory(identifier: "MORROW_ACTION", actions: [recovery], intentIdentifiers: [])
         let checkInCategory = UNNotificationCategory(identifier: "MORROW_CHECKIN", actions: [checkIn], intentIdentifiers: [])
         UNUserNotificationCenter.current().setNotificationCategories([recoveryCategory, checkInCategory])
+        scheduleHealthRefresh()
+        Task { @MainActor in WatchHealthStore.shared.prepareBackgroundDelivery() }
+    }
+
+    func applicationDidEnterBackground() {
+        scheduleHealthRefresh()
+    }
+
+    func handle(_ backgroundTasks: Set<WKRefreshBackgroundTask>) {
+        for task in backgroundTasks {
+            guard let refreshTask = task as? WKApplicationRefreshBackgroundTask else {
+                task.setTaskCompletedWithSnapshot(false)
+                continue
+            }
+            Task { @MainActor in
+                _ = await WatchHealthStore.shared.refreshFromBackground()
+                self.scheduleHealthRefresh(force: true)
+                refreshTask.setTaskCompletedWithSnapshot(false)
+            }
+        }
+    }
+
+    private func scheduleHealthRefresh(force: Bool = false) {
+        let key = "morrow.watch.healthRefresh.requestedAt"
+        let last = UserDefaults.standard.object(forKey: key) as? Date ?? .distantPast
+        guard force || Date().timeIntervalSince(last) >= 10 * 60 else { return }
+        UserDefaults.standard.set(Date(), forKey: key)
+        WKExtension.shared().scheduleBackgroundRefresh(
+            withPreferredDate: Date(timeIntervalSinceNow: 15 * 60),
+            userInfo: nil
+        ) { error in
+            if let error {
+                UserDefaults.standard.set(error.localizedDescription, forKey: "morrow.watch.healthRefresh.error")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "morrow.watch.healthRefresh.error")
+            }
+        }
     }
 
     func didRegisterForRemoteNotifications(withDeviceToken deviceToken: Data) {
@@ -45,6 +82,75 @@ final class MorrowWatchExtensionDelegate: NSObject, WKExtensionDelegate, UNUserN
             UserDefaults.standard.set("CHECKIN", forKey: "morrow.watch.pendingAction")
         }
         await MainActor.run { NotificationCenter.default.post(name: Notification.Name("morrow.watch.action"), object: nil) }
+    }
+}
+
+actor WatchHealthUploader {
+    static let shared = WatchHealthUploader()
+
+    func upload(_ snapshot: WatchHealthSnapshot) async -> Bool {
+        guard snapshot.hasData,
+              let connection = WatchConnectionStore.load(),
+              let root = URL(string: connection.apiRoot) else { return false }
+        let bucket = Int(Date().timeIntervalSince1970 / 300)
+        let payload = HealthPayload(
+            userId: connection.userId,
+            clientSnapshotId: "watch-\(bucket)",
+            source: "WATCH",
+            sleepMinutes: snapshot.sleepMinutes,
+            heartRate: snapshot.heartRate,
+            restingHeartRate: snapshot.restingHeartRate,
+            hrv: snapshot.hrv,
+            steps: snapshot.steps,
+            activeEnergyKcal: snapshot.activeEnergyKcal,
+            exerciseMinutes: snapshot.exerciseMinutes,
+            distanceMeters: snapshot.distanceMeters,
+            flightsClimbed: 0,
+            respiratoryRate: 0,
+            oxygenSaturationPercent: 0,
+            recordedAt: .now,
+            sleepSession: snapshot.sleepSession,
+            workouts: snapshot.workouts
+        )
+        do {
+            var request = URLRequest(url: root.appending(path: "health/snapshots"))
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(connection.accessToken)", forHTTPHeaderField: "Authorization")
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            request.httpBody = try encoder.encode(payload)
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            UserDefaults.standard.set(Date(), forKey: "morrow.watch.healthSync.lastSuccess")
+            UserDefaults.standard.removeObject(forKey: "morrow.watch.healthSync.error")
+            return true
+        } catch {
+            UserDefaults.standard.set(error.localizedDescription, forKey: "morrow.watch.healthSync.error")
+            return false
+        }
+    }
+
+    private struct HealthPayload: Encodable {
+        let userId: String
+        let clientSnapshotId: String
+        let source: String
+        let sleepMinutes: Int
+        let heartRate: Double
+        let restingHeartRate: Double
+        let hrv: Double
+        let steps: Double
+        let activeEnergyKcal: Double
+        let exerciseMinutes: Double
+        let distanceMeters: Double
+        let flightsClimbed: Double
+        let respiratoryRate: Double
+        let oxygenSaturationPercent: Double
+        let recordedAt: Date
+        let sleepSession: WatchSleepSession?
+        let workouts: [WatchWorkoutDetail]
     }
 }
 
