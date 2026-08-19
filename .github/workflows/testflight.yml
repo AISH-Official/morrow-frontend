@@ -1,0 +1,73 @@
+name: Upload iPhone and Watch to TestFlight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight-upload
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Archive and upload build 6
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate App Store Connect credentials
+        run: |
+          test -n "$ASC_ISSUER_ID"
+          test -n "$ASC_KEY_ID"
+          test -n "$ASC_PRIVATE_KEY_BASE64"
+
+      - name: Prepare App Store Connect key
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_PRIVATE_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Archive iPhone and Watch app
+        run: |
+          xcodebuild \
+            -project apple/Morrow.xcodeproj \
+            -scheme Morrow \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Morrow.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM=4UTM2VZ53U \
+            CODE_SIGN_STYLE=Automatic \
+            clean archive
+
+      - name: Upload archive to TestFlight
+        run: |
+          EXPORT_OPTIONS="$RUNNER_TEMP/ExportOptions.plist"
+          plutil -create xml1 "$EXPORT_OPTIONS"
+          /usr/libexec/PlistBuddy -c 'Add :method string app-store-connect' "$EXPORT_OPTIONS"
+          /usr/libexec/PlistBuddy -c 'Add :destination string upload' "$EXPORT_OPTIONS"
+          /usr/libexec/PlistBuddy -c 'Add :signingStyle string automatic' "$EXPORT_OPTIONS"
+          /usr/libexec/PlistBuddy -c 'Add :teamID string 4UTM2VZ53U' "$EXPORT_OPTIONS"
+          /usr/libexec/PlistBuddy -c 'Add :manageAppVersionAndBuildNumber bool false' "$EXPORT_OPTIONS"
+          /usr/libexec/PlistBuddy -c 'Add :uploadSymbols bool true' "$EXPORT_OPTIONS"
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/Morrow.xcarchive" \
+            -exportPath "$RUNNER_TEMP/TestFlightExport" \
+            -exportOptionsPlist "$EXPORT_OPTIONS" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
